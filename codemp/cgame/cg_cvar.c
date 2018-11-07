@@ -68,6 +68,12 @@ static void CG_UpdateHUD(void) {
 		return;
 }
 
+static void CG_UpdateSpecCamera(void) {
+	if ((cg.predictedPlayerState.pm_flags & PMF_FOLLOW) && cg_specCameraMode.integer) {
+		trap->Cvar_Set( "cg_specCameraMode", "0" ); //Make sure this is off
+	}
+}
+
 //Strafehelper colors
 static void CG_StrafeHelperActiveColorChange(void) {
 	if (sscanf(cg_strafeHelperActiveColor.string, "%f %f %f %f", &cg.strafeHelperActiveColor[0], &cg.strafeHelperActiveColor[1], &cg.strafeHelperActiveColor[2], &cg.strafeHelperActiveColor[3]) != 4) {
