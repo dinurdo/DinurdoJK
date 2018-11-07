@@ -471,17 +471,10 @@ void CL_SystemInfoChanged( void ) {
 		}
 		// ehw!
 		if ( !Q_stricmp( key, "fs_game" ) ) {
-			if(FS_CheckDirTraversal(value))
+			if (FS_CheckDirTraversal(value))
 			{
 				Com_Printf(S_COLOR_YELLOW "WARNING: Server sent invalid fs_game value %s\n", value);
 				continue;
-			}
-
-			if (!strlen(value) || !FS_FilenameCompare(value, "OpenJK"))
-				Q_strncpyz(value, BASEGAME, sizeof(BASEGAME));
-
-			if (cls.state < CA_ACTIVE && Cvar_VariableIntegerValue("fs_globalcfg")) {
-				Cbuf_ExecuteText(EXEC_APPEND, va("execq %s.cfg\n", value));
 			}
 
 			if (!FS_FilenameCompare(value, BASEGAME))
