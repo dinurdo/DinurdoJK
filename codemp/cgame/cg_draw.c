@@ -5215,10 +5215,7 @@ static float CG_DrawTimer( float y ) {
 
 	//JAPRO - Clientside - Show MS in map timer. - Start
 
-	if (cg_drawTimerMsec.integer)
-		s = va("%i:%02i.%03i", mins, secs, msec);
-	else
-		s = va("%i:%02i", mins, secs);
+	s = va("%i:%02i", mins, secs);
 
 	if (cg_drawTimer.integer == 2)
 	{
