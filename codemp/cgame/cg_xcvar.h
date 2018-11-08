@@ -76,7 +76,6 @@ XCVAR_DEF( cg_drawVote,				"1",	NULL,					CVAR_ARCHIVE )
 XCVAR_DEF( cg_strafeHelper,						"3008",	NULL,		CVAR_ARCHIVE )
 XCVAR_DEF( cg_strafeHelper_FPS,					"0",	NULL,		CVAR_ARCHIVE ) //fats _ syntax to follow smod ;s
 XCVAR_DEF( cg_strafeHelperOffset,				"75",	NULL,		CVAR_ARCHIVE )
-XCVAR_DEF( cg_strafeHelperInvertOffset,			"75",	NULL,		CVAR_ARCHIVE )
 XCVAR_DEF( cg_strafeHelperLineWidth,			"1",	NULL,		CVAR_ARCHIVE )
 
 //Sounds
@@ -125,7 +124,7 @@ XCVAR_DEF( cg_autoRecordDemo,					"0",	NULL,					CVAR_ARCHIVE )
 XCVAR_DEF( cg_autoRecordRaceDemo,				"0",	NULL,					CVAR_ARCHIVE )
 XCVAR_DEF( cg_autoKillWhenFalling,				"0",	NULL,					CVAR_ARCHIVE )
 #ifdef WIN32
-XCVAR_DEF( cg_engineModifications,				"1", CG_MemoryPatchChange,		CVAR_ARCHIVE ) //should remove
+XCVAR_DEF( cg_engineModifications,				"1",	CG_MemoryPatchChange,	CVAR_ARCHIVE ) //should remove
 #endif
 
 
