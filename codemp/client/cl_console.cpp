@@ -905,7 +905,6 @@ void Con_DrawSolidConsole( float frac ) {
 //	qhandle_t		conShader;
 	int				currentColor;
 	struct tm		*newtime;
-	char			am_pm[] = "AM";
 	time_t			rawtime;
 	char			ts[24];
 	const int padding = (int) (0.5f + (con_scale && con_scale->value > 0.0f) ? 2*con_scale->value : 2.0f);
@@ -957,16 +956,12 @@ void Con_DrawSolidConsole( float frac ) {
 	// Draw time and date
 	time(&rawtime);
 	newtime = localtime(&rawtime);
-	if (newtime->tm_hour > 12) strcpy(am_pm, "PM");
-	if (newtime->tm_hour > 12) newtime->tm_hour -= 12;
-	if (newtime->tm_hour == 0) newtime->tm_hour = 12;
-	Com_sprintf(ts, sizeof(ts), "%.19s %s ", asctime(newtime), am_pm);
+	strftime(ts, sizeof(ts), "%a, %b %e %I:%M %p ", newtime);
 	i = strlen(ts);
 
 	for (x = 0; x<i; x++) {
 		SCR_DrawSmallChar(cls.glconfig.vidWidth - (i - x) * con.charWidth, lines - (con.charHeight + con.charHeight / 2) + padding, ts[x]);
 	}
-
 
 	// draw the text
 	con.vislines = lines;
