@@ -956,7 +956,8 @@ void Con_DrawSolidConsole( float frac ) {
 	// Draw time and date
 	time(&rawtime);
 	newtime = localtime(&rawtime);
-	strftime(ts, sizeof(ts), "%a, %b %e %I:%M %p ", newtime);
+	strftime(ts, sizeof(ts), "%a, %b", newtime);
+	Com_sprintf(ts, sizeof(ts), "%s %i %i:%02i %s ", ts, newtime->tm_mday, newtime->tm_hour > 12 ? newtime->tm_hour - 12 : newtime->tm_hour, newtime->tm_min, newtime->tm_hour > 12 ? "PM" : "AM");
 	i = strlen(ts);
 
 	for (x = 0; x<i; x++) {

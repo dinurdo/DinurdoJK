@@ -922,7 +922,6 @@ static void IN_ProcessEvents( void )
 #ifdef _WIN32
 						con_alert = qfalse;
 #endif
-						Cbuf_ExecuteText(EXEC_NOW, "+button1");
 						break;
 					}
 
@@ -935,7 +934,6 @@ static void IN_ProcessEvents( void )
 							CL_Afk_f();
 							cls.afkTime = cls.realtime;
 						}
-						Cbuf_ExecuteText(EXEC_NOW, "-button1");
 						break;
 					}
 				}
