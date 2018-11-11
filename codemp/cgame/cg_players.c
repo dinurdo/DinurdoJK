@@ -1930,12 +1930,12 @@ void CG_NewClientInfo( int clientNum, qboolean entitiesInitialized ) {
 	//}
 	//loda	
 
-		else if ((newInfo.team != cg.predictedPlayerState.persistant[PERS_TEAM] || cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_FREE) && Q_stricmp(cg_forceEnemyModel.string, "0") && Q_stricmp(cg_forceEnemyModel.string, "none") && Q_stricmp(cg_forceEnemyModel.string, ""))
+		if ((newInfo.team != cg.predictedPlayerState.persistant[PERS_TEAM] || cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_FREE) && strlen(cg_forceEnemyModel.string) && Q_stricmp(cg_forceEnemyModel.string, "0") && Q_stricmp(cg_forceEnemyModel.string, "none"))
 		{
 			if (clientNum != cg.clientNum)	//this is me
 			Q_strncpyz( newInfo.modelName, cg_forceEnemyModel.string, sizeof(newInfo.modelName));
 		}
-		else if (newInfo.team == cg.predictedPlayerState.persistant[PERS_TEAM] && cg.predictedPlayerState.persistant[PERS_TEAM] != TEAM_FREE && Q_stricmp(cg_forceAllyModel.string, "0") && Q_stricmp(cg_forceAllyModel.string, "none") && Q_stricmp(cg_forceEnemyModel.string, ""))
+		else if (newInfo.team == cg.predictedPlayerState.persistant[PERS_TEAM] && cg.predictedPlayerState.persistant[PERS_TEAM] != TEAM_FREE && strlen(cg_forceAllyModel.string) && Q_stricmp(cg_forceAllyModel.string, "0") && Q_stricmp(cg_forceAllyModel.string, "none"))
 		{
 			if (clientNum != cg.clientNum)	//this is me
 				Q_strncpyz( newInfo.modelName, cg_forceAllyModel.string, sizeof(newInfo.modelName));
@@ -10475,6 +10475,12 @@ void CG_Player( centity_t *cent ) {
 		else if (ci->cosmetics & JAPRO_COSMETIC_CRINGE) {
 			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, trap->R_RegisterModel("models/players/hats/cringe.md3"));
 		}
+		else if (ci->cosmetics & JAPRO_COSMETIC_SOMBRERO) {
+			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, trap->R_RegisterModel("models/players/hats/sombrero.md3"));
+		}
+		else if (ci->cosmetics & JAPRO_COSMETIC_TOPHAT) {
+			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, trap->R_RegisterModel("models/players/hats/tophat.md3"));
+		}
 	}
 	//[/Kameleon]
 
@@ -12059,69 +12065,72 @@ stillDoSaber:
 			legs.shaderRGBA[2] /= 5.0f;
 			legs.renderfx |= RF_RGB_TINT;
 		}
-		else if (cg_stylePlayer.integer & JAPRO_STYLE_SHELL)
-		{ //adjust the glow by how far away you are from your dueling partner
-			centity_t *duelEnt;
+		else {
+			if (!(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD))
+				legs.renderfx |= RF_NOLOD;
 
-			duelEnt = &cg_entities[cg.snap->ps.duelIndex];
+			if (cg_stylePlayer.integer & JAPRO_STYLE_SHELL)
+			{ //adjust the glow by how far away you are from your dueling partner
+				centity_t *duelEnt;
 
-			if (duelEnt)
-			{
-				vec3_t vecSub;
-				float subLen = 0;
+				duelEnt = &cg_entities[cg.snap->ps.duelIndex];
 
-				VectorSubtract(duelEnt->lerpOrigin, cg.snap->ps.origin, vecSub);
-				subLen = VectorLength(vecSub);
-
-				if (subLen < 1)
+				if (duelEnt)
 				{
-					subLen = 1;
-				}
+					vec3_t vecSub;
+					float subLen = 0;
 
-				if (subLen > 1024)
-				{
-					subLen = 1024;
-				}
+					VectorSubtract(duelEnt->lerpOrigin, cg.snap->ps.origin, vecSub);
+					subLen = VectorLength(vecSub);
 
-				{
-					unsigned char savRGBA[3];
-					savRGBA[0] = legs.shaderRGBA[0];
-					savRGBA[1] = legs.shaderRGBA[1];
-					savRGBA[2] = legs.shaderRGBA[2];
-					legs.shaderRGBA[0] = Q_max(255-subLen/4,1);
-					legs.shaderRGBA[1] = Q_max(255-subLen/4,1);
-					legs.shaderRGBA[2] = Q_max(255-subLen/4,1);
-
-					legs.renderfx &= ~RF_RGB_TINT;
-					legs.renderfx &= ~RF_FORCE_ENT_ALPHA;
-					legs.customShader = cgs.media.forceShell;
-
-					if (!(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD)) //high shell lod?
-						legs.renderfx |= RF_NOLOD;
-
-					trap->R_AddRefEntityToScene( &legs );	//draw the shell
-
-					legs.customShader = 0;	//reset to player model
-					if (cgs.isJAPlus || cgs.isJAPro) { // dim color further away
-						legs.shaderRGBA[0] = Q_max(savRGBA[0] - subLen / 32, 1);
-						legs.shaderRGBA[1] = Q_max(savRGBA[1] - subLen / 32, 1);
-						legs.shaderRGBA[2] = Q_max(savRGBA[2] - subLen / 32, 1);
+					if (subLen < 1)
+					{
+						subLen = 1;
 					}
-					else {
-					legs.shaderRGBA[0] = Q_max(savRGBA[0]-subLen/8,1);
-					legs.shaderRGBA[1] = Q_max(savRGBA[1]-subLen/8,1);
-					legs.shaderRGBA[2] = Q_max(savRGBA[2]-subLen/8,1);
-				}
 
-					if (subLen <= 1024) {
-						if (cg_stylePlayer.integer & JAPRO_STYLE_SHELL)
-							legs.renderfx |= RF_FULLBRIGHT;
-						//else if (cg_drawDuelShell.integer == 2) // base behavior, add engine check for this!!!11
-							//legs.renderfx |= RF_RGB_TINT;
+					if (subLen > 1024)
+					{
+						subLen = 1024;
+					}
+
+					{
+						unsigned char savRGBA[3];
+						savRGBA[0] = legs.shaderRGBA[0];
+						savRGBA[1] = legs.shaderRGBA[1];
+						savRGBA[2] = legs.shaderRGBA[2];
+						legs.shaderRGBA[0] = Q_max(255 - subLen / 4, 1);
+						legs.shaderRGBA[1] = Q_max(255 - subLen / 4, 1);
+						legs.shaderRGBA[2] = Q_max(255 - subLen / 4, 1);
+
+						legs.renderfx &= ~RF_RGB_TINT;
+						legs.renderfx &= ~RF_FORCE_ENT_ALPHA;
+						legs.customShader = cgs.media.forceShell;
+
+						if (!(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD)) //high shell lod?
+							legs.renderfx |= RF_NOLOD;
+
+						trap->R_AddRefEntityToScene(&legs);	//draw the shell
+
+						legs.customShader = 0;	//reset to player model
+						if (cgs.isJAPlus || cgs.isJAPro) { // dim color further away
+							legs.shaderRGBA[0] = Q_max(savRGBA[0] - subLen / 32, 1);
+							legs.shaderRGBA[1] = Q_max(savRGBA[1] - subLen / 32, 1);
+							legs.shaderRGBA[2] = Q_max(savRGBA[2] - subLen / 32, 1);
+						}
+						else {
+							legs.shaderRGBA[0] = Q_max(savRGBA[0] - subLen / 8, 1);
+							legs.shaderRGBA[1] = Q_max(savRGBA[1] - subLen / 8, 1);
+							legs.shaderRGBA[2] = Q_max(savRGBA[2] - subLen / 8, 1);
+						}
+
+						if (subLen <= 1024) {
+							if (cg_stylePlayer.integer & JAPRO_STYLE_SHELL)
+								legs.renderfx |= RF_FULLBRIGHT;
+							//else if (cg_drawDuelShell.integer == 2) // base behavior, add engine check for this!!!11
+								//legs.renderfx |= RF_RGB_TINT;
+						}
 					}
 				}
-				if (!(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD)) //always use high detail on opponent?
-					legs.renderfx |= RF_NOLOD;
 			}
 		}
 	}

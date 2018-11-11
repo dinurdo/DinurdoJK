@@ -592,27 +592,7 @@
 				setcvar cg_strafeHelperOffset "75.0000"
 			}
 		}
-		
-		itemDef
-		{
-			name				InvertOffsetSlider
-			group				strafeHelper
-			type				ITEM_TYPE_SLIDER
-			text				"Invert Offset:"
-			cvarfloat			"cg_strafeHelperInvertOffset" 75 0 200
-			rect				14 84 172 20
-			textalign			ITEM_ALIGN_RIGHT
-			textalignx			68
-			font				4
-			textscale			1
-			forecolor			.615 .615 .956 1
-			visible				1
-			action
-			{
-				play			"sound/interface/button1.wav" ;
-			}
-		}
-		
+			
 		itemDef 
 		{
 			name				InvertOffsetField

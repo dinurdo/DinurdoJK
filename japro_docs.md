@@ -428,7 +428,6 @@
 	cg_strafeHelper					0	
 	cg_strafeHelper_FPS				0	
 	cg_strafeHelperOffset			75	
-	cg_strafeHelperInvertOffset		75	
 	cg_strafeHelperLineWidth		1	
    	cg_strafeHelperPrecision		256	
 	cg_strafeHelperCutoff			0	

@@ -8488,12 +8488,10 @@ static qboolean CG_DrawFollow( void )
 	CG_Text_Paint (4, 27, 0.85f, colorWhite, s, 0, 0, 0, FONT_MEDIUM );//JAPRO - Clientside - Move spectated clients name to top left corner of screen
 	
 	//Loda - add their movemnt style here..?f
-	if (pm && pm->ps && pm->ps->stats[STAT_RACEMODE])
-	{
-		char styleString[16] = {0};
-		IntegerToRaceName(pm->ps->stats[STAT_MOVEMENTSTYLE], styleString, sizeof(styleString));
-		CG_Text_Paint (4, 44, 0.7f, colorWhite, styleString, 0, 0, 0, FONT_MEDIUM );//JAPRO - Clientside - Move spectated clients name to top left corner of screen
-	}
+
+	char styleString[16] = {0};
+	IntegerToRaceName(cg.predictedPlayerState.stats[STAT_MOVEMENTSTYLE], styleString, sizeof(styleString));
+	CG_Text_Paint (4, 44, 0.7f, colorWhite, styleString, 0, 0, 0, FONT_MEDIUM );//JAPRO - Clientside - Move spectated clients name to top left corner of screen
 
 	return qtrue;
 }
@@ -9826,12 +9824,10 @@ static void CG_AutoDemoRaceRecord(void)
 {
 	if (!cg_autoRecordRaceDemo.integer)
 		return;
-	if (!cg.snap || !pm || !pm->ps)
-		return;
-	if (!pm->ps->stats[STAT_RACEMODE])
+	if (!cg.predictedPlayerState.stats[STAT_RACEMODE])
 		return;
 
-	if (pm->ps->duelTime - cg.lastStartTime > 2000) //Only start a new demo if we havnt started a new one in the last two seconds.
+	if (cg.predictedPlayerState.duelTime - cg.lastStartTime > 2000) //Only start a new demo if we havnt started a new one in the last two seconds.
 	{
 		char buf[256] = {0}, mapname[MAX_QPATH] = {0};
 
@@ -9843,12 +9839,12 @@ static void CG_AutoDemoRaceRecord(void)
 		trap->SendConsoleCommand(va("cl_noPrint !;stoprecord;record %s;cl_noPrint !\n", buf)); //sad hack to not show this message
 		cg.recording = qtrue;
 	}
-	else if (!pm->ps->duelTime && cg.recording) {
+	else if (!cg.predictedPlayerState.duelTime && cg.recording) {
 		trap->SendConsoleCommand(va("wait %i;cl_noPrint !;stoprecord;cl_noPrint !\n", 1000 / cg.frametime)); //Auto stop after crossing finish line...? wait 1 sec?
 		cg.recording = qfalse;
 	}
 
-	cg.lastStartTime = pm->ps->duelTime;
+	cg.lastStartTime = cg.predictedPlayerState.duelTime;
 }
 
 static void CG_Draw2D( void ) {
@@ -10995,14 +10991,11 @@ static void CG_JumpHeight(centity_t *cent)
 	const vec_t* const velocity = (cent->currentState.clientNum == cg.clientNum ? cg.predictedPlayerState.velocity : cent->currentState.pos.trDelta);
 	char jumpHeightStr[32] = {0};
 
-	if (!pm || !pm->ps)//idk
+	if (cg.predictedPlayerState.fd.forceJumpZStart == -65536) //Coming back from a tele or w/e
 		return;
 
-	if (pm->ps->fd.forceJumpZStart == -65536) //Coming back from a tele or w/e
-		return;
-
-	if (pm->ps->fd.forceJumpZStart && (cg.lastZSpeed > 0) && (velocity[2] <= 0)) {//If we were going up, and we are now going down, print our height.
-		cg.lastJumpHeight = pm->ps->origin[2] - pm->ps->fd.forceJumpZStart;
+	if (cg.predictedPlayerState.fd.forceJumpZStart && (cg.lastZSpeed > 0) && (velocity[2] <= 0)) {//If we were going up, and we are now going down, print our height.
+		cg.lastJumpHeight = cg.predictedPlayerState.origin[2] - cg.predictedPlayerState.fd.forceJumpZStart;
 		cg.lastJumpHeightTime = cg.time;
 	}
 
@@ -11265,7 +11258,7 @@ static void CG_Speedometer(void)
 			char speedStr4[32] = {0};
 			vec4_t colorGroundSpeed = {1, 1, 1, 1};
 
-			if (pm && (pm->ps->groundEntityNum != ENTITYNUM_NONE || pm->ps->velocity[2] < 0)) { //On ground or Moving down
+			if (cg.predictedPlayerState.groundEntityNum != ENTITYNUM_NONE || cg.predictedPlayerState.velocity[2] < 0) { //On ground or Moving down
 				cg.firstTimeInAir = qfalse;
 			}
 			else if (!cg.firstTimeInAir) { //Moving up for first time
