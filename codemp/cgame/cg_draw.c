@@ -8489,9 +8489,11 @@ static qboolean CG_DrawFollow( void )
 	
 	//Loda - add their movemnt style here..?f
 
-	char styleString[16] = {0};
-	IntegerToRaceName(cg.predictedPlayerState.stats[STAT_MOVEMENTSTYLE], styleString, sizeof(styleString));
-	CG_Text_Paint (4, 44, 0.7f, colorWhite, styleString, 0, 0, 0, FONT_MEDIUM );//JAPRO - Clientside - Move spectated clients name to top left corner of screen
+	if (cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE]) {
+		char styleString[16] = {0};
+		IntegerToRaceName(cg.predictedPlayerState.stats[STAT_MOVEMENTSTYLE], styleString, sizeof(styleString));
+		CG_Text_Paint (4, 44, 0.7f, colorWhite, styleString, 0, 0, 0, FONT_MEDIUM );//JAPRO - Clientside - Move spectated clients name to top left corner of screen
+	}
 
 	return qtrue;
 }
