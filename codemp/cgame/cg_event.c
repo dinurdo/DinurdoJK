@@ -3596,10 +3596,12 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 					char vchatstr[1024] = {0};
 					Q_strncpyz(vchatstr, va("<%s^7: %s>\n", ci->name, descr), sizeof( vchatstr ) );
 					CG_ChatBox_AddString(vchatstr);
-					if (cg_chatBox.integer)
-						trap->Print("*%s", vchatstr); //supress in top left w/ the chatbox enabled
-					else
-						trap->Print(vchatstr);
+					if (ui_vgs.integer > 1) {
+						if (cg_chatBox.integer)
+							trap->Print("*%s", vchatstr); //supress in top left w/ the chatbox enabled
+						else
+							trap->Print(vchatstr);
+					}
 				}
 
 				if (ci->team == ourTeam || isGlobalVGS(s))

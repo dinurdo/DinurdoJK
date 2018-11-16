@@ -374,5 +374,6 @@ XCVAR_DEF( ui_tm2_c5_cnt,						"0",					NULL,					CVAR_ROM|CVAR_INTERNAL )
 XCVAR_DEF( ui_tm2_cnt,							"0",					NULL,					CVAR_ROM|CVAR_INTERNAL )
 XCVAR_DEF( ui_tm3_cnt,							"0",					NULL,					CVAR_ROM|CVAR_INTERNAL )
 
+XCVAR_DEF( ui_vgs,								"2",					NULL,					CVAR_ARCHIVE )
 
 #undef XCVAR_DEF
