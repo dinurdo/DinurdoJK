@@ -153,7 +153,7 @@ XCVAR_DEF( ui_sha_b,						"0",					CVU_StrafeHelper,	CVAR_ARCHIVE|CVAR_INTERNAL 
 XCVAR_DEF( ui_sha_a,						"200",					CVU_StrafeHelper,	CVAR_ARCHIVE|CVAR_INTERNAL )
 XCVAR_DEF( ui_username,						"",						NULL,				CVAR_ARCHIVE|CVAR_INTERNAL|CVAR_NORESTART )
 XCVAR_DEF( ui_password,						"",						NULL,				CVAR_ARCHIVE|CVAR_INTERNAL|CVAR_NORESTART )
-XCVAR_DEF( ui_vgs,							"1",					NULL,				CVAR_ARCHIVE )
+XCVAR_DEF( ui_vgs,							"2",					NULL,				CVAR_ARCHIVE )
 XCVAR_DEF( ui_isJAPro,						"0",					NULL,				CVAR_INTERNAL|CVAR_ROM )
 XCVAR_DEF( ui_allowSaberSwitch,				"0",					NULL,				CVAR_INTERNAL|CVAR_ROM )
 XCVAR_DEF( ui_RGBSkin,						"0",					NULL,				CVAR_INTERNAL|CVAR_ROM )
