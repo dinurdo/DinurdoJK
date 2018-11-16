@@ -1601,9 +1601,11 @@ static void CG_Chat_f( void ) {
 			CG_RemoveChatEscapeChar( text );
 
 			// Copy text somewhere else and log that
-			Q_strncpyz(logtext, text, sizeof(logtext));
-			Q_CleanStr(logtext);
-			CG_LogPrintf(cg.log.chat, "%s\n", logtext);
+			if (!cg.demoPlayback) {
+				Q_strncpyz(logtext, text, sizeof(logtext));
+				Q_CleanStr(logtext);
+				CG_LogPrintf(cg.log.chat, "%s\n", logtext);
+			}
 
 			// from duo
 			// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
@@ -1670,9 +1672,11 @@ static void CG_Chat_f( void ) {
 			CG_RemoveChatEscapeChar( text );
 
 			// Copy text somewhere else and log that
-			Q_strncpyz(logtext, text, sizeof(logtext));
-			Q_CleanStr(logtext);
-			CG_LogPrintf(cg.log.chat, "%s\n", logtext);
+			if (!cg.demoPlayback) {
+				Q_strncpyz(logtext, text, sizeof(logtext));
+				Q_CleanStr(logtext);
+				CG_LogPrintf(cg.log.chat, "%s\n", logtext);
+			}
 
 			//from duo
 			// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
@@ -1705,9 +1709,11 @@ static void CG_Chat_f( void ) {
 		CG_RemoveChatEscapeChar( text );
 
 		// Copy text somewhere else and log that
-		Q_strncpyz(logtext, text, sizeof(logtext));
-		Q_CleanStr(logtext);
-		CG_LogPrintf(cg.log.chat, "%s\n", logtext);
+		if (!cg.demoPlayback) {
+			Q_strncpyz(logtext, text, sizeof(logtext));
+			Q_CleanStr(logtext);
+			CG_LogPrintf(cg.log.chat, "%s\n", logtext);
+		}
 
 		// from duo
 		// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
@@ -1763,9 +1769,11 @@ static void CG_Chat_f( void ) {
 		CG_RemoveChatEscapeChar( text );
 
 		// Copy text somewhere else and log that
-		Q_strncpyz(logtext, text, sizeof(logtext));
-		Q_CleanStr(logtext);
-		CG_LogPrintf(cg.log.chat, "%s\n", logtext);
+		if (!cg.demoPlayback) {
+			Q_strncpyz(logtext, text, sizeof(logtext));
+			Q_CleanStr(logtext);
+			CG_LogPrintf(cg.log.chat, "%s\n", logtext);
+		}
 
 		// from duo
 		// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
