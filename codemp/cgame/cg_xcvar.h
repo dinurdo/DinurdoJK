@@ -185,7 +185,7 @@ XCVAR_DEF( cg_strafeTrailLife,					"5",	NULL,					CVAR_ARCHIVE )
 XCVAR_DEF( cg_strafeTrailRacersOnly,			"0",	NULL,					CVAR_ARCHIVE )
 XCVAR_DEF( cg_strafeTrailRadius,				"2",	NULL,					CVAR_ARCHIVE )
 XCVAR_DEF( cg_strafeTrailFPS,					"40",	NULL,					0 )
-XCVAR_DEF( cg_strafeTrailGhost,					"0",	NULL,					CVAR_ARCHIVE )
+XCVAR_DEF( cg_strafeTrailGhost,					"1",	NULL,					CVAR_ARCHIVE )
 
 XCVAR_DEF( cg_drainFX,							"1",	NULL,					CVAR_NONE )
 //Make maxpackets userinfo maybe idk
