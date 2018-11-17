@@ -74,10 +74,9 @@ static void CG_DrawTrajectoryLine(void);
 #define SPEEDOMETER_JUMPDISTANCE	(1<<3)
 #define SPEEDOMETER_VERTICALSPEED	(1<<4)
 #define SPEEDOMETER_YAWSPEED		(1<<5)
-#define SPEEDOMETER_ACCELMETER		(1<<6)
-#define SPEEDOMETER_SPEEDGRAPH		(1<<7)
-#define SPEEDOMETER_KPH				(1<<8)
-#define SPEEDOMETER_MPH				(1<<9)
+#define SPEEDOMETER_SPEEDGRAPH		(1<<6)
+#define SPEEDOMETER_KPH				(1<<7)
+#define SPEEDOMETER_MPH				(1<<8)
 //japro end
 
 // nmckenzie: DUEL_HEALTH
@@ -1790,7 +1789,7 @@ void CG_DrawHUD(centity_t	*cent)
 
 	if (cg_speedometer.integer & SPEEDOMETER_ENABLE) {
 		CG_Speedometer();
-		if (cg_speedometer.integer & SPEEDOMETER_ACCELMETER || cg_strafeHelper.integer & SHELPER_ACCELMETER)
+		if (cg_strafeHelper.integer & SHELPER_ACCELMETER)
 			CG_DrawAccelMeter();
 		if (cg_speedometer.integer & SPEEDOMETER_JUMPHEIGHT)
 			CG_JumpHeight(cent);

@@ -217,7 +217,6 @@ static bitInfo_t speedometerSettings[] = {
 	{ "Jump distance display" },
 	{ "Vertical speed indicator" },
 	{ "Yaw speed indicator" },
-	{ "Accel meter" },
 	{ "Speed graph" },
 	{ "Display speed in kilometers instead of units" },
 	{ "Display speed in imperial miles instead of units" },

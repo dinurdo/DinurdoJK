@@ -1348,10 +1348,9 @@ static bitInfo_T speedometerSettings[] = { // MAX_WEAPON_TWEAKS tweaks (24)
 	{ "Jump distance display" },//3
 	{ "Vertical speed indicator" },//4
 	{ "Yaw speed indicator" },//5
-	{ "Accel meter" },//6
-	{ "Speed graph" },//7
-	{ "Display speed in kilometers instead of units" },//8
-	{ "Display speed in imperial miles instead of units" },//9
+	{ "Speed graph" },//6
+	{ "Display speed in kilometers instead of units" },//7
+	{ "Display speed in imperial miles instead of units" },//8
 };
 static const int MAX_SPEEDOMETER_SETTINGS = ARRAY_LEN(speedometerSettings);
 
