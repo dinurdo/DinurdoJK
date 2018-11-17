@@ -1585,11 +1585,14 @@ static void CG_Print_f( void ) {
 
 	CG_CheckSVStringEdRef( strEd, CG_Argv( 1 ) );
 	trap->Print( "%s", strEd );
+
+	if (cg_logChat.integer > 1)
+		CG_LogPrintf(cg.log.chat, "%s\n", strEd); //Log server console prints?
 }
 
 void CG_ChatBox_AddString(char *chatStr);
 static void CG_Chat_f( void ) {
-	char cmd[MAX_STRING_CHARS] = {0}, text[MAX_SAY_TEXT] = {0}, logtext[MAX_SAY_TEXT] = {0};
+	char cmd[MAX_STRING_CHARS] = {0}, text[MAX_SAY_TEXT] = {0};
 
 	trap->Cmd_Argv( 0, cmd, sizeof( cmd ) );
 
@@ -1600,12 +1603,7 @@ static void CG_Chat_f( void ) {
 			trap->Cmd_Argv( 1, text, sizeof( text ) );
 			CG_RemoveChatEscapeChar( text );
 
-			// Copy text somewhere else and log that
-			if (!cg.demoPlayback) {
-				Q_strncpyz(logtext, text, sizeof(logtext));
-				Q_CleanStr(logtext);
-				CG_LogPrintf(cg.log.chat, "%s\n", logtext);
-			}
+			CG_LogPrintf(cg.log.chat, "%s\n", text);
 
 			// from duo
 			// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
@@ -1671,12 +1669,7 @@ static void CG_Chat_f( void ) {
 			Com_sprintf( text, sizeof( text ), "%s^7<%s> ^%s%s", name, loc, color, message );
 			CG_RemoveChatEscapeChar( text );
 
-			// Copy text somewhere else and log that
-			if (!cg.demoPlayback) {
-				Q_strncpyz(logtext, text, sizeof(logtext));
-				Q_CleanStr(logtext);
-				CG_LogPrintf(cg.log.chat, "%s\n", logtext);
-			}
+			CG_LogPrintf(cg.log.chat, "%s\n", text);
 
 			//from duo
 			// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
@@ -1708,12 +1701,7 @@ static void CG_Chat_f( void ) {
 		trap->Cmd_Argv( 1, text, sizeof( text ) );
 		CG_RemoveChatEscapeChar( text );
 
-		// Copy text somewhere else and log that
-		if (!cg.demoPlayback) {
-			Q_strncpyz(logtext, text, sizeof(logtext));
-			Q_CleanStr(logtext);
-			CG_LogPrintf(cg.log.chat, "%s\n", logtext);
-		}
+		CG_LogPrintf(cg.log.chat, "%s\n", text);
 
 		// from duo
 		// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
@@ -1768,12 +1756,7 @@ static void CG_Chat_f( void ) {
 		Com_sprintf( text, sizeof( text ), "%s^7<%s> ^%s%s", name, loc, color, message );
 		CG_RemoveChatEscapeChar( text );
 
-		// Copy text somewhere else and log that
-		if (!cg.demoPlayback) {
-			Q_strncpyz(logtext, text, sizeof(logtext));
-			Q_CleanStr(logtext);
-			CG_LogPrintf(cg.log.chat, "%s\n", logtext);
-		}
+		CG_LogPrintf(cg.log.chat, "%s\n", text);
 
 		// from duo
 		// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
