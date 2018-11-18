@@ -1807,10 +1807,10 @@ void CG_DrawHUD(centity_t	*cent)
 	if (cg_strafeHelper.integer & SHELPER_CROSSHAIR) {
 		vec4_t		hcolor;
 		float		lineWidth;
-		hcolor[0] = cg_crosshairRed.value / 255.0f;
-		hcolor[1] = cg_crosshairGreen.value / 255.0f;
-		hcolor[2] = cg_crosshairBlue.value / 255.0f;
-		hcolor[3] = cg_crosshairAlpha.value / 255.0f;//alpha? pff
+		hcolor[0] = cg.crosshairColor[0];
+		hcolor[1] = cg.crosshairColor[1];
+		hcolor[2] = cg.crosshairColor[2];
+		hcolor[3] = cg.crosshairColor[3];
 
 		lineWidth = cg_strafeHelperLineWidth.value;
 		if (lineWidth < 0.25f)
@@ -6593,21 +6593,13 @@ static void CG_DrawCrosshair( vec3_t worldPoint, int chEntValid ) {
 		CG_ColorForHealth( hcolor );
 		trap->R_SetColor( hcolor );
 	}
-	else if (cg_drawCrosshair.integer == 10) {
-		vec4_t hcolor;
-		hcolor[0] = 1.0f;
-		hcolor[1] = 1.0f;
-		hcolor[2] = 1.0f;
-		hcolor[3] = 3.0f;
-		trap->R_SetColor(hcolor);
-	}
-	else if (cg_crosshairRed.value || cg_crosshairGreen.value || cg_crosshairBlue.value)
+	else if (cg.crosshairColor[0] || cg.crosshairColor[1] || cg.crosshairColor[2])
 	{
 		vec4_t		hcolor;
-		hcolor[0] = cg_crosshairRed.value / 255.0f;
-		hcolor[1] = cg_crosshairGreen.value / 255.0f;
-		hcolor[2] = cg_crosshairBlue.value / 255.0f;
-		hcolor[3] = cg_crosshairAlpha.value / 255.0f;
+		hcolor[0] = cg.crosshairColor[0];
+		hcolor[1] = cg.crosshairColor[1];
+		hcolor[2] = cg.crosshairColor[2];
+		hcolor[3] = cg.crosshairColor[3];
 		trap->R_SetColor( hcolor );
 	}
 	else
