@@ -135,7 +135,6 @@ XCVAR_DEF( cg_autoLoginPass3,					"0",	NULL,					CVAR_ARCHIVE )
 
 //Logging
 XCVAR_DEF( cg_logChat,							"1",	NULL,					CVAR_ARCHIVE )
-XCVAR_DEF( cg_logFormat,						"1",	NULL,					CVAR_ARCHIVE )
 
 //BETA
 XCVAR_DEF( cg_specHud,							"0",	NULL,					CVAR_ARCHIVE )
