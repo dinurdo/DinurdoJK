@@ -1590,7 +1590,7 @@ static void CG_Print_f( void ) {
 	trap->Print( "%s", strEd );
 
 	if (cg_logChat.integer & JAPRO_CHATLOG_PRINT)
-		CG_LogPrintf(cg.log.chat, "%s\n", strEd); //Log server console prints?
+		CG_LogPrintf(cg.log.chat, "%s", strEd); //Log server console prints?
 }
 
 void CG_ChatBox_AddString(char *chatStr);

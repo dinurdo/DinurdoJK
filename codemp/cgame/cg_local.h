@@ -254,7 +254,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define JAPRO_CHATLOG_SYNC		(1<<1)
 #define JAPRO_CHATLOG_OLDTIMESTAMP (1<<2)
 #define JAPRO_CHATLOG_PRINT		(1<<3)
-#define JAPRO_CHATLOG_CENTERPRINT	(1<<3)
+#define JAPRO_CHATLOG_CENTERPRINT	(1<<4)
+#define JAPRO_CHATLOG_DEATHS	(1<<5)
 
 #define _SPPHYSICS 1
 typedef enum //movementstyle enum

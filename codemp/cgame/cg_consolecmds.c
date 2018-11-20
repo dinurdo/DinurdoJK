@@ -1461,11 +1461,12 @@ static void CG_Cosmetics_f(void)
 }
 
 static bitInfo_T chatLog[] = { // MAX_WEAPON_TWEAKS tweaks (24)
-	{ "Enable" },//0
-	{ "Log Sync" },//1
-	{ "Legacy Timestamps" },//2
-	{ "Log Console Prints" },//3
-	{ "Log Center Prints" }//3
+	{ "Enable chatlogs" },//0
+	{ "Log sync" },//1
+	{ "Use Legacy timestamps" },//2
+	{ "Log Server console prints" },//3
+	{ "Log Server center prints" },//4
+	{ "Log death prints" }//5
 };
 static const int MAX_CHATLOG_SETTINGS = ARRAY_LEN(chatLog);
 
