@@ -6863,7 +6863,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint, int chEntValid ) {
 
 
 	//JAPRO - Clientside - Option to disable crosshair scaling.
-	if (!cg_crosshairSizeScale.integer || cg_drawCrosshair.integer == 10) {
+	if (!cg_crosshairSizeScale.integer /*|| cg_drawCrosshair.integer == 10*/) {
 		w = (float)(cg_crosshairSize.value / (cgs.glconfig.vidWidth * (1.0 / SCREEN_WIDTH)));
 		h = (float)(cg_crosshairSize.value / (cgs.glconfig.vidHeight * (1.0 / SCREEN_HEIGHT)));
 	}
@@ -6899,12 +6899,12 @@ static void CG_DrawCrosshair( vec3_t worldPoint, int chEntValid ) {
 		hShader = cgs.media.crosshairShader[cg_drawCrosshair.integer % NUM_CROSSHAIRS];
 	}
 
-	if (cg_crosshairSizeScale.integer && cg_drawCrosshair.integer != 10)
+	if (cg_crosshairSizeScale.integer /*&& cg_drawCrosshair.integer != 10*/)
 		w *= cgs.widthRatioCoef;
 
-		chX = x + cg.refdef.x + 0.5 * (SCREEN_WIDTH - w);
-		chY = y + cg.refdef.y + 0.5 * (SCREEN_HEIGHT - h);
-		trap->R_DrawStretchPic(chX, chY, w, h, 0, 0, 1, 1, hShader);
+	chX = x + cg.refdef.x + 0.5 * (SCREEN_WIDTH - w);
+	chY = y + cg.refdef.y + 0.5 * (SCREEN_HEIGHT - h);
+	trap->R_DrawStretchPic(chX, chY, w, h, 0, 0, 1, 1, hShader);
 
 	//draw a health bar directly under the crosshair if we're looking at something
 	//that takes damage
