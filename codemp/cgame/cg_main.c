@@ -1329,9 +1329,13 @@ static void CG_RegisterGraphics( void ) {
 #endif
 	}
 
-	for ( i = 0 ; i < NUM_CROSSHAIRS ; i++ ) {
+	for ( i = 1 ; i < NUM_CROSSHAIRS-1 ; i++ ) { //1 to 8 instead of 0 to 9
 		cgs.media.crosshairShader[i] = trap->R_RegisterShaderNoMip( va("gfx/2d/crosshair%c", 'a'+i) );
 	}
+	//Swap A and J since we want crosshairA (dot) to work on old modcode. 1=B, 2=C, 3=D, 4=E, 5=F, 6=G, 7=H, 8=I, 9=A, 10=J.
+	cgs.media.crosshairShader[NUM_CROSSHAIRS-1] = trap->R_RegisterShaderNoMip( va("gfx/2d/crosshair%c", 'a'+0) ); //9=A
+	cgs.media.crosshairShader[0] = trap->R_RegisterShaderNoMip( va("gfx/2d/crosshair%c", 'a'+9) ); //10=J
+
 
 	cg.loadLCARSStage = 4;
 
