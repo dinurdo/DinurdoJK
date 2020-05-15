@@ -924,6 +924,17 @@ typedef struct strafeTrail_s {
 } strafeTrail_t;
 #endif
 
+#define MAX_COSMETIC_UNLOCKS 32
+typedef struct CosmeticUnlocks_s {
+	unsigned short	bitvalue;
+	char			mapname[40];
+	short			style;
+	unsigned int	duration;
+	qboolean		active;
+} CosmeticUnlocks_t;
+CosmeticUnlocks_t cosmeticUnlocks[MAX_COSMETIC_UNLOCKS];
+//japro
+
 //======================================================================
 
 
@@ -1900,6 +1911,17 @@ typedef struct cgMedia_s {
 
 	qhandle_t	raceShader;
 	qhandle_t	duelShader;
+
+	//japro cosmetics
+	struct {
+		qhandle_t	santaHat;
+		qhandle_t	pumpkin;
+		qhandle_t	cap;
+		qhandle_t	fedora;
+		qhandle_t	kringekap;
+		qhandle_t	sombrero;
+		qhandle_t	tophat;
+	} cosmetics;
 
 	sfxHandle_t		maleVGSSounds[MAX_CUSTOM_VGS_SOUNDS];//vgs
 	sfxHandle_t		femaleVGSSounds[MAX_CUSTOM_VGS_SOUNDS];//vgs
