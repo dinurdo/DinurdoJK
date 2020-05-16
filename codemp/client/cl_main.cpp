@@ -1819,7 +1819,8 @@ void CL_ServersResponsePacket( const netadr_t *from, msg_t *msg ) {
 	byte*			buffptr;
 	byte*			buffend;
 
-	Com_Printf("CL_ServersResponsePacket from %s\n", NET_AdrToString( *from ) );
+	if (com_developer && com_developer->integer)
+		Com_Printf("CL_ServersResponsePacket from %s\n", NET_AdrToString( *from ) );
 
 	if (cls.numglobalservers == -1) {
 		// state to detect lack of servers or lack of response
@@ -1911,7 +1912,8 @@ void CL_ServersResponsePacket( const netadr_t *from, msg_t *msg ) {
 	cls.numglobalservers = count;
 	total = count + cls.numGlobalServerAddresses;
 
-	Com_Printf("%d servers parsed (total %d)\n", numservers, total);
+	if (com_developer && com_developer->integer)
+		Com_Printf("%d servers parsed (total %d)\n", numservers, total);
 }
 
 #ifndef MAX_STRINGED_SV_STRING
