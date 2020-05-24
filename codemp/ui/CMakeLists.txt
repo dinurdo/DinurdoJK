@@ -103,13 +103,13 @@ endif()
 if(MakeApplicationBundles AND BuildMPEngine)
 	install(TARGETS ${MPUI}
 		LIBRARY
-		DESTINATION "${JKAInstallDir}/${MPEngine}.app/Contents/MacOS/dinurdojk"
+		DESTINATION "${JKAInstallDir}/${MPEngine}.app/Contents/MacOS/DinurdoJK"
 		COMPONENT ${JKAMPCoreComponent})
 elseif(WIN32)
 else()
 	install(TARGETS ${MPUI}
 		LIBRARY
-		DESTINATION "${JKAInstallDir}/dinurdojk"
+		DESTINATION "${JKAInstallDir}/DinurdoJK"
 		COMPONENT ${JKAMPCoreComponent})
 endif()
 

@@ -364,6 +364,18 @@ if(BuildMPEngine)
 		find_package(OpenGL REQUIRED)
 		set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OPENGL_INCLUDE_DIR})
 		set(MPEngineLibraries ${MPEngineLibraries} ${OPENGL_LIBRARIES})
+		
+		if(BuildDiscordRichPresence)
+			if (APPLE)
+				set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OpenJKLibDir}/discord-rpc/include)
+				set(MPEngineDefines ${MPEngineDefines} "DISCORD")
+				set(MPEngineLibraries ${MPEngineLibraries} ${OpenJKLibDir}/discord-rpc/lib/osx/libdiscord-rpc.a)
+			elseif(Architecture MATCHES "x86_64")
+				set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OpenJKLibDir}/discord-rpc/include)
+				set(MPEngineDefines ${MPEngineDefines} "DISCORD")
+				set(MPEngineLibraries ${MPEngineLibraries} ${OpenJKLibDir}/discord-rpc/lib/libdiscord-rpc.a)
+			endif(APPLE)
+		endif(BuildDiscordRichPresence)
 	endif()
 
 	# OpenAL (is optionally included for Windows)
@@ -381,6 +393,12 @@ if(BuildMPEngine)
 			set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OPENAL_INCLUDE_DIR})
 			set(MPEngineLibraries ${MPEngineLibraries} ${OPENAL_LIBRARY})
 		endif(UseInternalOpenAL)
+		
+		if(BuildDiscordRichPresence)
+			set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OpenJKLibDir}/discord-rpc/include)
+			set(MPEngineDefines ${MPEngineDefines} "DISCORD")
+			set(MPEngineLibraries ${MPEngineLibraries} ${OpenJKLibDir}/discord-rpc/lib/discord-rpc.lib)
+		endif(BuildDiscordRichPresence)
 	endif()
 
 	if(UseInternalSDL2)
@@ -427,6 +445,7 @@ if(BuildMPEngine)
 		"${MPDir}/client/cl_cgameapi.h"
 		"${MPDir}/client/cl_cin.cpp"
 		"${MPDir}/client/cl_console.cpp"
+		"${MPDir}/client/cl_discordrpc.cpp"
 		"${MPDir}/client/cl_input.cpp"
 		"${MPDir}/client/cl_keys.cpp"
 		"${MPDir}/client/cl_lan.cpp"
@@ -746,7 +765,7 @@ set(GameLibFullPaths)
 		ALL
 		DEPENDS ${BinsPk3})
 	install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${BinsPk3}
-		DESTINATION "${JKAInstallDir}/dinurdojk"
+		DESTINATION "${JKAInstallDir}/DinurdoJK"
 		COMPONENT ${JKAMPCoreComponent})
 endif()
 
@@ -757,5 +776,5 @@ add_custom_target(Assets
 	DEPENDS japro-assets.pk3)
 install(FILES
 		${CMAKE_CURRENT_BINARY_DIR}/japro-assets.pk3
-	DESTINATION "${JKAInstallDir}/dinurdojk"
+	DESTINATION "${JKAInstallDir}/DinurdoJK"
 	COMPONENT ${JKAMPCoreComponent})

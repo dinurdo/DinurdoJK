@@ -361,8 +361,14 @@ SV_AddEntitiesVisibleFromPoint
 ===============
 */
 float g_svCullDist = -1.0f;
+#define MAX_LANDING_EFFECTS_PER_SNAPSHOT 16
 static void SV_AddEntitiesVisibleFromPoint( vec3_t origin, clientSnapshot_t *frame,
-									snapshotEntityNumbers_t *eNums, qboolean portal ) {
+#ifndef DEDICATED
+									snapshotEntityNumbers_t *eNums, qboolean portal )
+#else
+									snapshotEntityNumbers_t *eNums, qboolean portal, qboolean skipDuelCull )
+#endif
+{
 	int		e, i;
 	sharedEntity_t *ent;
 	svEntity_t	*svEnt;
@@ -373,6 +379,7 @@ static void SV_AddEntitiesVisibleFromPoint( vec3_t origin, clientSnapshot_t *fra
 	byte	*bitvector;
 	vec3_t	difference;
 	float	length, radius;
+	int		effectCount = 0;
 
 	// during an error shutdown message we may need to transmit
 	// the shutdown message after the server has shutdown, so
@@ -426,8 +433,29 @@ static void SV_AddEntitiesVisibleFromPoint( vec3_t origin, clientSnapshot_t *fra
 			}
 		}
 
-		if (DuelCull(SV_GentityNum(frame->ps.clientNum), ent)) {
+#ifdef DEDICATED
+		if (!skipDuelCull && DuelCull(SV_GentityNum(frame->ps.clientNum), ent) == 1) {
 			continue;
+		}
+#endif
+
+		if (ent->s.eType >= ET_EVENTS && sv_legacyFixes->integer && !(sv_legacyFixes->integer & SVFIXES_DISABLE_MOVEMENT_EVENT_CHECKS) &&
+			svs.servermod < SVMOD_JAPRO && svs.servermod != SVMOD_UNKNOWN && svs.servermod != SVMOD_MBII)//only check event types on known mods, to avoid modified eTypes/event enum conflicts
+		{
+			int eventNum = (ent->s.eType - ET_EVENTS) & ~EV_EVENT_BITS;
+
+			if (eventNum == EV_JUMP || eventNum == EV_FALL || eventNum == EV_FOOTSTEP)
+			{ //block these movement-triggered event entities, these should always be on a player
+				continue;
+			}
+			
+			if ((eventNum == EV_PLAY_EFFECT || eventNum == EV_PLAY_EFFECT_ID) &&
+				(ent->s.eventParm >= EFFECT_WATER_SPLASH && ent->s.eventParm <= EFFECT_LANDING_GRAVEL)) //all landing effects
+			{
+				effectCount++;
+				if (effectCount > MAX_LANDING_EFFECTS_PER_SNAPSHOT)
+					continue; //block these so they cant be abused on ffa3
+			}
 		}
 
 		svEnt = SV_SvEntityForGentity( ent );
@@ -536,7 +564,11 @@ static void SV_AddEntitiesVisibleFromPoint( vec3_t origin, clientSnapshot_t *fra
 					continue;
 				}
 			}
+#ifndef DEDICATED
 			SV_AddEntitiesVisibleFromPoint( ent->s.origin2, frame, eNums, qtrue );
+#else
+			SV_AddEntitiesVisibleFromPoint( ent->s.origin2, frame, eNums, qtrue, skipDuelCull );
+#endif
 		}
 	}
 }
@@ -623,7 +655,11 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 
 	// add all the entities directly visible to the eye, which
 	// may include portal entities that merge other viewpoints
+#ifndef DEDICATED
 	SV_AddEntitiesVisibleFromPoint( org, frame, &entityNumbers, qfalse );
+#else
+	SV_AddEntitiesVisibleFromPoint( org, frame, &entityNumbers, qfalse, client->disableDuelCull );
+#endif
 
 	// if there were portals visible, there may be out of order entities
 	// in the list which will need to be resorted for the delta compression
@@ -645,9 +681,11 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 		ent = SV_GentityNum(entityNumbers.snapshotEntities[i]);
 		state = &svs.snapshotEntities[svs.nextSnapshotEntities % svs.numSnapshotEntities];
 		*state = ent->s;
-		//if (client->nonsolid && DuelCull(client->gentity, ent)) {
-		//	state->solid = 0;
-		//}
+#ifdef DEDICATED
+		if (!client->jpPlugin && DuelCull(client->gentity, ent)) {
+			state->solid = 0;
+		}
+#endif
 		svs.nextSnapshotEntities++;
 		// this should never hit, map should always be restarted first in SV_Frame
 		if ( svs.nextSnapshotEntities >= 0x7FFFFFFE ) {

@@ -58,7 +58,7 @@ static void CG_ParseScores( void ) {
 	memset( cg.scores, 0, sizeof( cg.scores ) );
 	for ( i=0; i<readScores; i++ ) {
 //JAPRO - Clientside - Scoreboard Deaths - Start
-		if ((cgs.isJAPlus && (!Q_stricmp(cjp_client.string, "1.4JAPRO"))) || cgs.isJAPro) {
+		if ((cgs.serverMod == SVMOD_JAPLUS && (!Q_stricmp(cjp_client.string, "1.4JAPRO"))) || cgs.serverMod == SVMOD_JAPRO) {
 			scoreOffset = 15;
 			cg.scores[i].deaths = atoi(CG_Argv(i * scoreOffset + 18));
 		}
@@ -130,7 +130,7 @@ static void CG_ParseCosmetics ( void ) { //Parse server cosmetics info for clien
 	//Build cosmetics array for use in CG_Cosmetics_f
 	char*	pch;
 	char buf[4096] = {0};//eh
-	int args = 1, row = 0, i;
+	int args = 1, row = 0;//, i;
 
 	Q_strncpyz(buf, CG_Argv(1), sizeof(buf));
 
@@ -158,6 +158,7 @@ static void CG_ParseCosmetics ( void ) { //Parse server cosmetics info for clien
 	}
 }
 
+
 /*
 ================
 CG_ParseServerinfo
@@ -168,6 +169,7 @@ and whenever the server updates any serverinfo flagged cvars
 */
 void CG_ParseServerinfo( void ) {
 	const char *info = NULL;
+	const char *gamename = NULL;
 	char *mapname;
 	int i, value;
 	char restrictString[16] = { 0 };
@@ -178,8 +180,6 @@ void CG_ParseServerinfo( void ) {
 	cgs.stepSlideFix = atoi( Info_ValueForKey( info, "g_stepSlideFix" ) );
 
 	cgs.noSpecMove = atoi( Info_ValueForKey( info, "g_noSpecMove" ) );
-
-	trap->Cvar_Set("bg_fighterAltControl", Info_ValueForKey( info, "bg_fighterAltControl" ));
 
 	cgs.siegeTeamSwitch = atoi( Info_ValueForKey( info, "g_siegeTeamSwitch" ) );
 
@@ -232,50 +232,57 @@ void CG_ParseServerinfo( void ) {
 	*/
 
 	cgs.maxclients = Com_Clampi( 0, MAX_CLIENTS, atoi( Info_ValueForKey( info, "sv_maxclients" ) ) );
-
-	trap->Cvar_Set("ui_version", Info_ValueForKey(info, "version"));
-
+	trap->Cvar_Set("ui_version", Info_ValueForKey(info, "version")); //used by UI in the in-game "about" menu
 	cgs.svfps = atoi( Info_ValueForKey( info, "sv_fps" ) );
-	cgs.isJAPlus = qfalse;
-	cgs.isJAPro = qfalse;
-	cgs.isOJKAlt = qfalse;
-	cgs.isBaseEnhanced = qfalse;
-	cgs.isBase = qfalse;
-	cgs.legacyProtocol = qfalse;
+	if (!cgs.svfps)
+		cgs.svfps = 20;
+	cgs.serverMod = SVMOD_BASEJKA;
 	cgs.cinfo = 0;
 	cgs.jcinfo = 0;
+	cgs.pluginSet = qfalse;
+	cgs.legacyProtocol = qfalse;
 	cgs.restricts = 0;
-	if (!Q_stricmpn(Info_ValueForKey(info, "gamename"), "JA+", 3)
-	|| !Q_stricmpn(Info_ValueForKey(info, "gamename"), "^4U^3A^5Galaxy", 14)
-	|| !Q_stricmpn(Info_ValueForKey(info, "gamename"), "AbyssMod", 8)) {	//uag :s - yes its fatz
-		cgs.isJAPlus = qtrue;
-		cgs.cinfo = atoi (Info_ValueForKey (info, "jp_cinfo" ));//[JAPRO - Clientside - All - Add jp_cinfo variable to get cinfo from japlus servers]
-		cgs.hookpull = 800;
-	} 
-	else if (!Q_stricmpn(Info_ValueForKey(info, "gamename"), "japro", 5)) {
-		cgs.isJAPro = qtrue;
-		cgs.jcinfo = atoi (Info_ValueForKey (info, "jcinfo" ));//[JAPRO - Clientside - All - Add gamename variable to get jcinfo from japro servers]
-		cgs.hookpull = atoi (Info_ValueForKey (info, "g_hookStrength" ));//[JAPRO - Clientside - All - Add gamename variable to get jcinfo from japro servers]
-		trap->Cvar_Set("cjp_client", "1.4JAPRO");
-		//if (cgs.hookpull == 0)
-			//cgs.hookpull = 800;
-	}
-	else if (!Q_stricmpn(Info_ValueForKey(info, "gamename"), "smU", 3))
-	{
-		cgs.isOJKAlt = qtrue;
-	}
-	else if (!Q_stricmpn(Info_ValueForKey(info, "gamename"), "base_enhanced", 13)
-	|| (!Q_stricmpn(Info_ValueForKey(info, "gamename"), "base_entranced", 14))) {
-		cgs.isBaseEnhanced = qtrue;
-	}
-	else if (!Q_stricmpn(Info_ValueForKey(info, "gamename"), "basejka", 7))
-	{
-		cgs.isBase = qtrue;
+
+	gamename = Info_ValueForKey(info, "gamename");
+	if (gamename) {
+		if (!Q_stricmpn(gamename, "JA+", 3)
+			|| !Q_stricmpn(gamename, "^4U^3A^5Galaxy", 14)
+			|| !Q_stricmpn(gamename, "AbyssMod", 8)) {	//uag :s - yes its fatz
+			cgs.serverMod = SVMOD_JAPLUS;
+			cgs.cinfo = atoi(Info_ValueForKey(info, "jp_cinfo"));//[JAPRO - Clientside - All - Add jp_cinfo variable to get cinfo from japlus servers]
+			cgs.hookpull = 800;
+			if (!Q_stricmpn(cjp_client.string, "1.4", 3))
+				cgs.pluginSet = qtrue;
+		}
+		else if (!Q_stricmpn(gamename, "japro", 5)) {
+			cgs.serverMod = SVMOD_JAPRO;
+			cgs.cinfo = atoi(Info_ValueForKey(info, "jcinfo"));//[JAPRO - Clientside - All - Add gamename variable to get jcinfo from japro servers]
+			cgs.jcinfo = cgs.cinfo;
+			cgs.hookpull = atoi(Info_ValueForKey(info, "g_hookStrength"));//[JAPRO - Clientside - All - Add gamename variable to get jcinfo from japro servers]
+			trap->Cvar_Set("cjp_client", "1.4JAPRO");
+			cgs.pluginSet = qtrue;
+			//if (cgs.hookpull == 0)
+				//cgs.hookpull = 800;
+		}
+		else if (!Q_stricmpn(gamename, "smU", 3))
+		{
+			cgs.serverMod = SVMOD_OJKALT;
+		}
+		else if (!Q_stricmpn(gamename, "base_enhanced", 13)
+			|| (!Q_stricmpn(gamename, "base_entranced", 14))) {
+			cgs.serverMod = SVMOD_BASEENHANCED;
+		}
+		else if (!Q_stricmpn(gamename, "basejk", 6))
+		{
+			cgs.serverMod = SVMOD_BASEJKA;
+		}
 	}
 
 	//multiversion "support"
-	if (atoi(Info_ValueForKey(info, "protocol")) < 26)
+	if (atoi(Info_ValueForKey(info, "protocol")) < 26) {
 		cgs.legacyProtocol = qtrue; //v1.00
+		cgs.serverMod = SVMOD_BASEJKA;
+	}
 		
 
 	restrictString[0] = 'r';
@@ -316,9 +323,12 @@ void CG_ParseServerinfo( void ) {
 	Q_strncpyz( cgs.voteString, CG_ConfigString( CS_VOTE_STRING ), sizeof( cgs.voteString ) );
 
 	// synchronise our expected snaps/sec with the server's framerate
+	// actually how about we don't do this
+#if 0
 	i = atoi( Info_ValueForKey( info, "sv_fps" ) );
 	if ( i )
 		trap->Cvar_Set( "snaps", va( "%i", i ) );
+#endif
 }
 
 /*
@@ -448,7 +458,9 @@ void CG_ShaderStateChanged(void) {
 				strncpy(timeOffset, t, o-t);
 				timeOffset[o-t] = 0;
 				o++;
-				if (cg_remaps.integer)//JAPRO - Clientside - Allow noremaps
+				if (cg_remaps.integer == 1 && Q_stricmpn(originalShader, "models/players/", 15))//block player texture remaps
+					trap->R_RemapShader(originalShader, newShader, timeOffset);
+				else if (cg_remaps.integer && cg_remaps.integer != 1)//JAPRO - Clientside - Allow noremaps
 					trap->R_RemapShader( originalShader, newShader, timeOffset );
 			}
 		} else {
@@ -1154,6 +1166,19 @@ require a reload of all the media
 ===============
 */
 static void CG_MapRestart( void ) {
+	int i;
+	clientInfo_t *ci;
+	for (i = 0 ; i < MAX_CLIENTS ; i++)
+	{ //reset our death count on everyone
+		ci = &cgs.clientinfo[i];
+		if (!ci)
+			continue;
+		if (!ci->infoValid)
+			continue;
+		
+		ci->deaths = 0;
+	}
+
 	if ( cg_showMiss.integer ) {
 		trap->Print( "CG_MapRestart\n" );
 	}
@@ -1600,8 +1625,8 @@ static void CG_CenterPrint_f( void ) {
 	CG_CheckSVStringEdRef( strEd, CG_Argv( 1 ) );
 	CG_CenterPrint( strEd, SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
 
-	if (cg_logChat.integer & JAPRO_CHATLOG_CENTERPRINT)
-		CG_LogPrintf(cg.log.chat, "%s\n", strEd); //Log server center prints?
+	if ((cg_logChat.integer & JAPRO_CHATLOG_ENABLE) && (cg_logChat.integer & JAPRO_CHATLOG_CENTERPRINT))
+		CG_LogPrintf(cg.log.file, "%s\n", strEd); //Log server center prints?
 }
 
 static void CG_CenterPrintSE_f( void ) {
@@ -1613,6 +1638,9 @@ static void CG_CenterPrintSE_f( void ) {
 
 	trap->SE_GetStringTextString( x, strEd, MAX_STRINGED_SV_STRING );
 	CG_CenterPrint( strEd, SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
+
+	if ((cg_logChat.integer & JAPRO_CHATLOG_ENABLE) && (cg_logChat.integer & JAPRO_CHATLOG_CENTERPRINT))
+		CG_LogPrintf(cg.log.file, "%s\n", strEd); //Log server center prints?
 }
 
 static void CG_Print_f( void ) {
@@ -1621,156 +1649,70 @@ static void CG_Print_f( void ) {
 	CG_CheckSVStringEdRef( strEd, CG_Argv( 1 ) );
 	trap->Print( "%s", strEd );
 
-	if (cg_logChat.integer & JAPRO_CHATLOG_PRINT)
-		CG_LogPrintf(cg.log.chat, "%s", strEd); //Log server console prints?
+	if ((cg_logChat.integer & JAPRO_CHATLOG_ENABLE) && (cg_logChat.integer & JAPRO_CHATLOG_PRINT))
+		CG_LogPrintf(cg.log.file, "%s\n", strEd); //Log server console prints?
 }
 
 void CG_ChatBox_AddString(char *chatStr);
 static void CG_Chat_f( void ) {
-	char cmd[MAX_STRING_CHARS] = {0}, text[MAX_SAY_TEXT] = {0};
+	char cmd[MAX_STRING_CHARS] = {0}, text[MAX_NETNAME+MAX_SAY_TEXT] = {0}, logtext[MAX_NETNAME+MAX_SAY_TEXT] = {0};
 
 	trap->Cmd_Argv( 0, cmd, sizeof( cmd ) );
 
-	if ( !strcmp( cmd, "chat" ) ) {
-		if ( !cg_teamChatsOnly.integer ) {
-			if ( cg_chatSounds.integer )//JAPRO - Clientside - Chatsounds option
-				trap->S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
-			trap->Cmd_Argv( 1, text, sizeof( text ) );
+	if (cmd[0] != 'l') { // normal chat ?/}
+
+		trap->Cmd_Argv( 1, text, sizeof( text ) );
+
+		if ( !Q_stricmp( cmd, "chat" ) && !cg_teamChatsOnly.integer )
+		{
 			CG_RemoveChatEscapeChar( text );
 
-			CG_LogPrintf(cg.log.chat, "%s\n", text);
+			if (cg_cleanChatbox.integer) {
+				char cleanMsg[MAX_NETNAME + MAX_SAY_TEXT];
 
-			// from duo
-			// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
-			char tempChatStr[MAX_SAY_TEXT] = { 0 }, *r = text, *w = tempChatStr;
-			while (*r) {
-				if (*r == -80 && *(r + 1) == '/' && *(r + 2) == '.') {
-					*w = '%';
-					r += 3;
-				}
-				else if (*r == '\'' && *(r + 1) == '\'') {
-					*w = '"';
-					r += 2;
-				}
-				else {
-					*w = *r;
-					r++;
-				}
-				w++;
-			}
-			Q_strncpyz(text, tempChatStr, sizeof(text));
-
-			if (cg_chatBox.integer) {
-				char cleanMsg[MAX_SAY_TEXT+64];
-
-				strcpy(cleanMsg, text);//Find Media - Currently Playing
+				Q_strncpyz(cleanMsg, text, sizeof(cleanMsg));//Find Media - Currently Playing
 				Q_CleanString(cleanMsg);
 
-				if(cg_cleanChatbox.integer && strstr(cleanMsg, "Media - Currently playing: ") != NULL) {
+				if (Q_stristr(cleanMsg, "Media - Currently playing: ") != NULL) {
 					return;
 				}
-				if (cg_cleanChatbox.integer && !strcmp(text, cg.lastChatMsg)) {//Same exact msg/sender as previous //replace this with q_strcmp in entire function..?
+
+				if (Q_stristr(cleanMsg, "^5Hi everybody!") != NULL) {
 					return;
 				}
-				//New msg
-				CG_ChatBox_AddString(text);
-				trap->Print("*%s\n", text);
-				Q_strncpyz(cg.lastChatMsg, text, sizeof(cg.lastChatMsg));
 			}
-			else {
-				trap->Print("%s\n", text);
-			}
-		}
-	}
-	else if ( !strcmp( cmd, "lchat" ) ) {
-		if ( !cg_teamChatsOnly.integer ) {
-			char	name[MAX_NETNAME]={0},	loc[MAX_STRING_CHARS]={0},
-					color[8]={0},			message[MAX_STRING_CHARS]={0};
-
-			if ( trap->Cmd_Argc() < 4 )
+				
+			if (cg_cleanChatbox.integer && !Q_strncmp(text, cg.lastChatMsg, strlen(text))) {//Same exact msg/sender as previous //replace this with q_strcmp in entire function..?
 				return;
-
-			trap->Cmd_Argv( 1, name, sizeof( name ) );
-			trap->Cmd_Argv( 2, loc, sizeof( loc ) );
-			trap->Cmd_Argv( 3, color, sizeof( color ) );
-			trap->Cmd_Argv( 4, message, sizeof( message ) );
-
-			//get localized text
-			if ( loc[0] == '@' )
-				trap->SE_GetStringTextString( loc+1, loc, sizeof( loc ) );
-
-			if ( cg_chatSounds.integer )//JAPRO - Clientside - Chatsounds option
-				trap->S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
-			Com_sprintf( text, sizeof( text ), "%s^7<%s> ^%s%s", name, loc, color, message );
-			CG_RemoveChatEscapeChar( text );
-
-			CG_LogPrintf(cg.log.chat, "%s\n", text);
-
-			//from duo
-			// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
-			char tempChatStr[MAX_SAY_TEXT] = { 0 }, *r = text, *w = tempChatStr;
-			while (*r) {
-				if (*r == -80 && *(r + 1) == '/' && *(r + 2) == '.') {
-					*w = '%';
-					r += 3;
+			}
+			//New msg
+			if (cg_chatSounds.integer == 2 && !cg_cleanChatbox.integer) { //check to play sound for PMs here since the cleanChatBox code will handle this for us
+				if (Q_stristr(text, "^7]: ^6")) {
+					trap->S_StartLocalSound(cgs.media.talkSound, CHAN_LOCAL_SOUND);
 				}
-				else if (*r == '\'' && *(r + 1) == '\'') {
-					*w = '"';
-					r += 2;
-				}
-				else {
-					*w = *r;
-					r++;
-				}
-				w++;
 			}
-			Q_strncpyz(text, tempChatStr, sizeof(text));
-
-			CG_ChatBox_AddString( text );
-			trap->Print( "*%s\n", text );
-		}
-	}
-	else if ( !strcmp( cmd, "tchat" ) ) {
-		if( cg_chatSounds.integer )//JAPRO - Clientside - Chatsounds option
-			trap->S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
-		trap->Cmd_Argv( 1, text, sizeof( text ) );
-		CG_RemoveChatEscapeChar( text );
-
-		CG_LogPrintf(cg.log.chat, "%s\n", text);
-
-		// from duo
-		// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
-		char tempChatStr[MAX_SAY_TEXT] = { 0 }, *r = text, *w = tempChatStr;
-		while (*r) {
-			if (*r == -80 && *(r + 1) == '/' && *(r + 2) == '.') {
-				*w = '%';
-				r += 3;
-			}
-			else if (*r == '\'' && *(r + 1) == '\'') {
-				*w = '"';
-				r += 2;
-			}
-			else {
-				*w = *r;
-				r++;
-			}
-			w++;
-		}
-		Q_strncpyz(text, tempChatStr, sizeof(text));
-
-		if (cg_chatBox.integer) {
-			if (cg_cleanChatbox.integer && !strcmp(text, cg.lastChatMsg)) {//Same exact msg/sender as previous //replace this with q_strcmp in entire function..?
-				return;
+			else if (cg_chatSounds.integer && cg_chatSounds.integer != 2) {//JAPRO - Clientside - Chatsounds option
+				trap->S_StartLocalSound(cgs.media.talkSound, CHAN_LOCAL_SOUND);
 			}
 			CG_ChatBox_AddString(text);
-			trap->Print("*%s\n", text);
+
 			Q_strncpyz(cg.lastChatMsg, text, sizeof(cg.lastChatMsg));
 		}
-		else {
-			trap->Print( "%s\n", text );
+		else if ( !Q_stricmp( cmd, "tchat" ) )
+		{
+			CG_RemoveChatEscapeChar( text );
+
+			if (cg_cleanChatbox.integer && !Q_strncmp(text, cg.lastChatMsg, strlen(text))) {//Same exact msg/sender as previous //replace this with q_strcmp in entire function..?
+				return;
+			}
+
+			if (cg_chatSounds.integer)//JAPRO - Clientside - Chatsounds option
+				trap->S_StartLocalSound(cgs.media.talkSound, CHAN_LOCAL_SOUND);
+			CG_ChatBox_AddString(text);
 		}
 	}
-	else if ( !strcmp( cmd, "ltchat" ) ) {
+	else
+	{ //location chat ?
 		char	name[MAX_NETNAME]={0},	loc[MAX_STRING_CHARS]={0},
 				color[8]={0},			message[MAX_STRING_CHARS]={0};
 
@@ -1783,38 +1725,22 @@ static void CG_Chat_f( void ) {
 		trap->Cmd_Argv( 4, message, sizeof( message ) );
 
 		//get localized text
-		if ( loc[0] == '@' )
-			trap->SE_GetStringTextString( loc+1, loc, sizeof( loc ) );
+		if (loc[0] == '@')
+			trap->SE_GetStringTextString(loc + 1, loc, sizeof(loc));
 
-		if( cg_chatSounds.integer )//JAPRO - Clientside - Chatsounds option
-			trap->S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
-		Com_sprintf( text, sizeof( text ), "%s^7<%s> ^%s%s", name, loc, color, message );
-		CG_RemoveChatEscapeChar( text );
+		if (cg_chatSounds.integer)//JAPRO - Clientside - Chatsounds option
+			trap->S_StartLocalSound(cgs.media.talkSound, CHAN_LOCAL_SOUND);
 
-		CG_LogPrintf(cg.log.chat, "%s\n", text);
-
-		// from duo
-		// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
-		char tempChatStr[MAX_SAY_TEXT] = { 0 }, *r = text, *w = tempChatStr;
-		while (*r) {
-			if (*r == -80 && *(r + 1) == '/' && *(r + 2) == '.') {
-				*w = '%';
-				r += 3;
-			}
-			else if (*r == '\'' && *(r + 1) == '\'') {
-				*w = '"';
-				r += 2;
-			}
-			else {
-				*w = *r;
-				r++;
-			}
-			w++;
+		if ( !Q_stricmp( cmd, "lchat" ) && !cg_teamChatsOnly.integer ) {
+			Com_sprintf( text, sizeof( text ), "%s^7<%s> ^%s%s", name, loc, color, message );
+			CG_RemoveChatEscapeChar( text );
+			CG_ChatBox_AddString( text );
 		}
-		Q_strncpyz(text, tempChatStr, sizeof(text));
-
-		CG_ChatBox_AddString( text );
-		trap->Print( "*%s\n", text );
+		else if ( !Q_stricmp( cmd, "ltchat" ) ) {
+			Com_sprintf( text, sizeof( text ), "%s^7<%s> ^%s%s", name, loc, color, message );
+			CG_RemoveChatEscapeChar( text );
+			CG_ChatBox_AddString( text );
+		}
 	}
 }
 

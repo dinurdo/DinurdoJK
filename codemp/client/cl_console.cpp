@@ -907,7 +907,7 @@ void Con_DrawSolidConsole( float frac ) {
 	struct tm		*newtime;
 	time_t			rawtime;
 	char			ts[24];
-	const int padding = (int) (0.5f + (con_scale && con_scale->value > 0.0f) ? 2*con_scale->value : 2.0f);
+	const int		padding = (int) (0.5f + (con_scale && con_scale->value > 0.0f) ? 2*con_scale->value : 2.0f);
 
 	lines = (int) (cls.glconfig.vidHeight * frac);
 	if (lines <= 0)
@@ -957,12 +957,13 @@ void Con_DrawSolidConsole( float frac ) {
 	time(&rawtime);
 	newtime = localtime(&rawtime);
 	strftime(ts, sizeof(ts), "%a, %b", newtime);
-	Com_sprintf(ts, sizeof(ts), "%s %i %i:%02i %s ", ts, newtime->tm_mday, newtime->tm_hour > 12 ? newtime->tm_hour - 12 : newtime->tm_hour, newtime->tm_min, newtime->tm_hour > 12 ? "PM" : "AM");
+	Com_sprintf(ts, sizeof(ts), "%s %i %i:%02i %s ", ts, newtime->tm_mday, newtime->tm_hour > 12 ? newtime->tm_hour - 12 : newtime->tm_hour, newtime->tm_min, newtime->tm_hour >= 12 ? "PM" : "AM");
 	i = strlen(ts);
 
 	for (x = 0; x<i; x++) {
 		SCR_DrawSmallChar(cls.glconfig.vidWidth - (i - x) * con.charWidth, lines - (con.charHeight + con.charHeight / 2) + padding, ts[x]);
 	}
+
 
 	// draw the text
 	con.vislines = lines;

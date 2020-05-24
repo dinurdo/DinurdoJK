@@ -109,21 +109,28 @@ cvar_t	*cl_consoleUseScanCode;
 
 cvar_t  *cl_lanForcePackets;
 
+cvar_t	*cl_drawRecording;
+
+//DinurdoJK
 cvar_t	*cl_ratioFix;
-cvar_t	*cl_coloredTextShadows;
 
-cvar_t *cl_drawRecording;
+cvar_t	*cl_colorString;
+cvar_t	*cl_colorStringCount;
+cvar_t	*cl_colorStringRandom;
 
-cvar_t *cl_colorString;
-cvar_t *cl_colorStringCount;
-cvar_t *cl_colorStringRandom;
-
-cvar_t *cl_afkTime;
-cvar_t *cl_afkTimeUnfocused;
-
-cvar_t *cl_logChat;
+cvar_t	*cl_chatStylePrefix;
+cvar_t	*cl_chatStyleSuffix;
 
 int		cl_unfocusedTime;
+cvar_t  *cl_afkPrefix;
+cvar_t	*cl_afkTime;
+cvar_t	*cl_afkTimeUnfocused;
+
+cvar_t	*cl_logChat;
+
+#if defined(DISCORD) && !defined(_DEBUG)
+cvar_t	*cl_discordRichPresence;
+#endif
 
 vec3_t cl_windVec;
 
@@ -152,8 +159,8 @@ typedef struct serverStatus_s
 	qboolean retrieved;
 } serverStatus_t;
 
-serverStatus_t cl_serverStatusList[MAX_SERVERSTATUSREQUESTS];
-int serverStatusCount;
+serverStatus_t cl_serverStatusList[MAX_SERVERSTATUSREQUESTS] = { 0 };
+int serverStatusCount = 0;
 
 IHeapAllocator *G2VertSpaceClient = 0;
 
@@ -514,16 +521,15 @@ static void CL_CompleteDemoName( char *args, int argNum )
 {
 	if( argNum == 2 )
 	{
-		char demoExt[16];
-		char demoExt2[16];
+		char demoExtension[8] = {0}, demoExtensionLegacy[8] = {0};
 
 		//this might be weird if someone has a bunch of 1.01 demos and one 1.00 demo, or vice versa
 		//need to check for both extensions @ the same time somehow
-		Com_sprintf(demoExt2, sizeof(demoExt2), ".dm_%d", PROTOCOL_LEGACY);
-		Field_CompleteFilename("demos", demoExt2, qfalse , qtrue);
+		Com_sprintf(demoExtensionLegacy, sizeof(demoExtensionLegacy), ".dm_%d", PROTOCOL_LEGACY);
+		Field_CompleteFilename("demos", demoExtensionLegacy, qfalse , qtrue);
 		
-		Com_sprintf(demoExt, sizeof(demoExt), ".dm_%d", PROTOCOL_VERSION);
-		Field_CompleteFilename( "demos", demoExt, qtrue, qtrue );
+		Com_sprintf(demoExtension, sizeof(demoExtension), ".dm_%d", PROTOCOL_VERSION);
+		Field_CompleteFilename("demos", demoExtension, qfalse, qtrue);
 	}
 }
 
@@ -535,9 +541,10 @@ demo <demoname>
 
 ====================
 */
-void CL_PlayDemo_f( void ) {
-	char		name[MAX_OSPATH], extension[32];
-	char		*arg;
+static void CL_PlayDemo_f( void ) {
+	char		name[MAX_STRING_CHARS] = {0};
+	char		*arg = NULL, *s = NULL, *demoExtension = NULL, *demoExtensionLegacy = NULL;
+	const char	*foundExtension = NULL, *foundSlash = NULL;
 
 	if (Cmd_Argc() < 2) {
 		Com_Printf ("demo <demoname>\n");
@@ -553,29 +560,33 @@ void CL_PlayDemo_f( void ) {
 
 	CL_Disconnect( qtrue );
 
-
-	//could probably be alot cleaner
-	//look for the old protocol first
-	Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_LEGACY);
-	if (!Q_stricmp(arg + strlen(arg) - strlen(extension), extension)) {
-		Com_sprintf(name, sizeof(name), "demos/%s", arg);
-	}
-	else {
-		Com_sprintf(name, sizeof(name), "demos/%s.dm_%d", arg, PROTOCOL_LEGACY);
+	if (!VALIDSTRING(arg)) {
+		Com_Error(ERR_DROP, "couldn't open file");
+		return;
 	}
 
-	if (!FS_FileExists(name)) {//start over w/ normal protocol idk
-		Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_VERSION);
-		if (!Q_stricmp(arg + strlen(arg) - strlen(extension), extension)) {
-			Com_sprintf(name, sizeof(name), "demos/%s", arg);
-		}
-		else {
-			Com_sprintf(name, sizeof(name), "demos/%s.dm_%d", arg, PROTOCOL_VERSION);
-		}
-	}
+	foundSlash = strchr(arg, '/');
+	if (Q_stricmpn(arg, "demos/", 6) && (!foundSlash || !VALIDSTRING(foundSlash))) //check for an explicit path
+		s = va("demos/%s", arg);
 
-	if (!FS_FileExists(name)) { //couldn't find a file with either extension?
-		Com_sprintf(name, sizeof(name), "demos/%s", arg); //strip the extension, if they see either extension in the error box then they probably did something dumb
+	if (!s || !VALIDSTRING(s))
+		s = arg;
+
+	foundExtension = Q_stristr(s, ".dm_");
+	demoExtension = va(".dm_%i", PROTOCOL_VERSION);
+	demoExtensionLegacy = va(".dm_%i", PROTOCOL_LEGACY);
+
+	if (foundExtension && VALIDSTRING(foundExtension) && (!Q_stricmp(foundExtension, demoExtension) || !Q_stricmp(foundExtension, demoExtensionLegacy)))
+	{ //extension was included in the demo's name
+		Q_strncpyz(name, s, sizeof(name));
+	}
+	else
+	{ //have to figure it out ourselves
+		//look for the old protocol first
+		Com_sprintf(name, sizeof(name), "%s%s", s, demoExtensionLegacy);
+
+		if (!FS_FileExists(name)) //try again w/ normal protocol
+			Com_sprintf(name, sizeof(name), "%s%s", s, demoExtension);
 	}
 
 	FS_FOpenFileRead( name, &clc.demofile, qtrue );
@@ -590,7 +601,7 @@ void CL_PlayDemo_f( void ) {
 		}
 		return;
 	}
-	Q_strncpyz( clc.demoName, Cmd_Argv(1), sizeof( clc.demoName ) );
+	Q_strncpyz( clc.demoName, name, sizeof( clc.demoName ) );
 
 	Con_Close();
 
@@ -607,9 +618,21 @@ void CL_PlayDemo_f( void ) {
 	clc.firstDemoFrameSkipped = qfalse;
 }
 
-void CL_DelDemo_f(void) {
-	char		name[MAX_OSPATH], extension[32];
-	char		*arg;
+static void CL_DemoRestart_f(void) {
+	char *demoname = clc.demoName;
+	if (!VALIDSTRING(demoname)) {
+		Com_Printf("No demo available to restart.\n");
+		return;
+	}
+
+	Com_Printf("Restarting demo \"%s\"\n", demoname);
+	Cbuf_ExecuteText(EXEC_APPEND, va("demo \"%s\"\n", demoname));
+}
+
+static void CL_DelDemo_f(void) {
+	char		name[MAX_STRING_CHARS] = {0};
+	char		*arg = NULL, *s = NULL, *demoExtension = NULL, *demoExtensionLegacy = NULL;
+	const char	*foundExtension = NULL, *foundSlash = NULL;
 
 	if (Cmd_Argc() < 2) {
 		Com_Printf("deletedemo <demoname>\n");
@@ -618,36 +641,43 @@ void CL_DelDemo_f(void) {
 
 	arg = Cmd_Args();
 
-	//look for the old protocol first
-	Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_LEGACY);
-	if (!Q_stricmp(arg + strlen(arg) - strlen(extension), extension)) {
-		Com_sprintf(name, sizeof(name), "demos/%s", arg);
-	}
-	else {
-		Com_sprintf(name, sizeof(name), "demos/%s.dm_%d", arg, PROTOCOL_LEGACY);
+	if (!VALIDSTRING(arg)) {
+		Com_Error(ERR_DROP, "couldn't open file");
+		return;
 	}
 
-	if (!FS_FileExists(name)) {//start over w/ normal protocol idk
-		Com_sprintf(extension, sizeof(extension), ".dm_%d", PROTOCOL_VERSION);
-		if (!Q_stricmp(arg + strlen(arg) - strlen(extension), extension)) {
-			Com_sprintf(name, sizeof(name), "demos/%s", arg);
+	foundSlash = strchr(arg, '/');
+	if (foundSlash && VALIDSTRING(foundSlash) && Q_stricmpn(arg, "demos/", 6)) //only allow deletion of demos inside of demos folder
+		return;
+
+	if (!s || !VALIDSTRING(s))
+		s = arg;
+
+	foundExtension = Q_stristr(s, ".dm_");
+	demoExtension = va(".dm_%i", PROTOCOL_VERSION);
+	demoExtensionLegacy = va(".dm_%i", PROTOCOL_LEGACY);
+
+	if (foundExtension && VALIDSTRING(foundExtension) && (!Q_stricmp(foundExtension, demoExtension) || !Q_stricmp(foundExtension, demoExtensionLegacy)))
+	{ //extension was included in the demo's name
+		Q_strncpyz(name, s, sizeof(name));
+	}
+	else
+	{ //have to figure it out ourselves
+		//look for the old protocol first
+		Com_sprintf(name, sizeof(name), "%s%s", s, demoExtensionLegacy);
+
+		if (!FS_FileExists(name)) {//try again w/ normal protocol
+			Com_sprintf(name, sizeof(name), "%s%s", s, demoExtension);
 		}
-		else {
-			Com_sprintf(name, sizeof(name), "demos/%s.dm_%d", arg, PROTOCOL_VERSION);
+
+		if (!FS_FileExists(name)) {
+			Com_Printf(S_COLOR_RED "Can't find demofile %s\n", name);
+			return;
 		}
 	}
 
-	if (!FS_FileExists(name)) { //couldn't find a file with either extension?
-		Com_sprintf(name, sizeof(name), "demos/%s", arg); //strip the extension, if they see either extension in the error box then they probably did something dumb
-	}
-
-	if (!FS_FileExists(name)) {
-		Com_Printf("^1Can't find demofile %s\n", name);
-	}
-	else {
-		FS_HomeRemove(name);
-		Com_Printf("^3Deleted demofile %s\n", name);
-	}
+	FS_HomeRemove(name);
+	Com_Printf(S_COLOR_YELLOW "Deleted demofile %s\n", name);
 }
 
 
@@ -1340,18 +1370,6 @@ void CL_Vid_Restart_f( void ) {
 
 /*
 =================
-CL_Fs_Restart_f
-
-Restart the filesystem
-=================
-*/
-
-void CL_Fs_Restart_f( void ) {
-	FS_Restart( clc.checksumFeed );
-}
-
-/*
-=================
 CL_Snd_Restart_f
 
 Restart the sound subsystem
@@ -1787,8 +1805,8 @@ CL_InitServerInfo
 */
 void CL_InitServerInfo( serverInfo_t *server, netadr_t *address ) {
 	server->adr = *address;
-	//server->clients = 0;
-	//server->filterBots = 0;
+	server->clients = 0;
+	server->filterBots = 0;
 	server->hostName[0] = '\0';
 	server->mapName[0] = '\0';
 	server->maxClients = 0;
@@ -2208,7 +2226,7 @@ void CL_CheckTimeout( void ) {
 	//
 	// check timeout
 	//
-	if ( ( !CL_CheckPaused() || !sv_paused->integer )
+	if ( !clc.demoplaying && ( !CL_CheckPaused() || !sv_paused->integer )
 		&& cls.state >= CA_CONNECTED && cls.state != CA_CINEMATIC
 	    && cls.realtime - clc.lastPacketTime > cl_timeout->integer*1000) {
 		if (++cl.timeoutcount > 5) {	// timeoutcount saves debugger
@@ -2266,11 +2284,11 @@ void CL_CheckUserinfo( void ) {
 }
 
 qboolean cl_afkName;
-static const char *afkPrefix = "[AFK]";
-static const size_t afkPrefixLen = strlen(afkPrefix);
+static size_t afkPrefixLen = 0;
 
 static void CL_GetAfk(void) {
-	if (!Q_strncmp(cl_name->string, afkPrefix, afkPrefixLen)) {
+	afkPrefixLen = strlen(cl_afkPrefix->string);
+	if (!Q_strncmp(cl_name->string, cl_afkPrefix->string, afkPrefixLen)) {
 		cl_afkName = qtrue;
 	}
 	else {
@@ -2329,7 +2347,6 @@ static void CL_UpdateWidescreen(void) {
 	else
 		cls.widthRatioCoef = 1.0f;
 }
-
 
 
 int cl_nameModifiedTime = 0;
@@ -2478,6 +2495,27 @@ void CL_Frame ( int msec ) {
 		// save the current screen
 		CL_TakeVideoFrame( );
 	}
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	if (cl_discordRichPresence->integer) {
+		if ( cls.realtime >= 5000 && !cls.discordInitialized )
+		{ //we just turned it on
+			CL_DiscordInitialize();
+			cls.discordInitialized = qtrue;
+		}
+	
+		if ( cls.realtime >= cls.discordUpdateTime && cls.discordInitialized )
+		{
+			CL_DiscordUpdatePresence();
+			cls.discordUpdateTime = cls.realtime + 500;
+		}
+	}
+	else if (cls.discordInitialized) { //we just turned it off
+		CL_DiscordShutdown();
+		cls.discordUpdateTime = 0;
+		cls.discordInitialized = qfalse;
+	}
+#endif
 }
 
 
@@ -2873,8 +2911,9 @@ static void CL_AddFavorite_f( void ) {
 }
 
 void CL_Afk_f(void) {
-	char name[MAX_TOKEN_CHARS];
+	char name[MAX_TOKEN_CHARS], afkPrefix[MAX_TOKEN_CHARS];;
 	Cvar_VariableStringBuffer("name", name, sizeof(name));
+	Cvar_VariableStringBuffer("cl_afkPrefix", afkPrefix, sizeof(afkPrefix));
 	if (cls.realtime - cl_nameModifiedTime <= 5000)
 		Com_Printf("You must wait 5 seconds before changing your name again.\n");
 	else {
@@ -2987,7 +3026,7 @@ static void CL_ColorString_f(void) {
 	}
 }
 
-void CL_RandomizeColors(const char* in, char *out) {
+void CL_RandomizeColors(const char *in, char *out) {
 	int count = cl_colorStringCount->integer;
 	int i, random, j = 0, store = 0;
 	const char *p = in;
@@ -3288,7 +3327,7 @@ void CL_Init( void ) {
 	Cvar_Get ("color2", "4", CVAR_USERINFO | CVAR_ARCHIVE, "Player saber2 color" );
 	Cvar_Get ("handicap", "100", CVAR_USERINFO | CVAR_ARCHIVE, "Player handicap" );
 	Cvar_Get ("sex", "male", CVAR_USERINFO | CVAR_ARCHIVE, "Player sex" );
-	Cvar_Get ("password", "", CVAR_USERINFO, "Password to join server" );
+	Cvar_Get ("password", "", CVAR_USERINFO|CVAR_NORESTART, "Password to join server" );
 	Cvar_Get ("cg_predictItems", "1", CVAR_USERINFO | CVAR_ARCHIVE );
 
 	//default sabers
@@ -3305,15 +3344,23 @@ void CL_Init( void ) {
 
 	cl_ratioFix = Cvar_Get("cl_ratioFix", "1", CVAR_ARCHIVE, "Widescreen aspect ratio correction");
 
+	cl_colorString = Cvar_Get("cl_colorString", "0", CVAR_ARCHIVE, "Bit value of selected colors in colorString, configure chat colors with /colorstring");
+	cl_colorStringCount = Cvar_Get("cl_colorStringCount", "0", CVAR_INTERNAL | CVAR_ROM | CVAR_ARCHIVE);
+	cl_colorStringRandom = Cvar_Get("cl_colorStringRandom", "2", CVAR_ARCHIVE, "Randomness of the colors changing, higher numbers are less random");
+
+	cl_chatStylePrefix = Cvar_Get("cl_chatStylePrefix", "", CVAR_ARCHIVE, "String inserted before sent chat messages");
+	cl_chatStyleSuffix = Cvar_Get("cl_chatStyleSuffix", "", CVAR_ARCHIVE, "String appended to send chat messages");
+
+	cl_afkPrefix = Cvar_Get("cl_afkPrefix", "[AFK]", CVAR_ARCHIVE, "Prefix to add to player name when AFK");
 	cl_afkTime = Cvar_Get("cl_afkTime", "10", CVAR_ARCHIVE, "Minutes to autorename to afk, 0 to disable");
 	cl_afkTimeUnfocused = Cvar_Get("cl_afkTimeUnfocused", "5", CVAR_ARCHIVE, "Minutes to autorename to afk while unfocused/minimized");
 	cl_unfocusedTime = 0;
 
-	cl_colorString = Cvar_Get("cl_colorString", "0", CVAR_ARCHIVE, "Bit value of selected colors in colorString");
-	cl_colorStringCount = Cvar_Get("cl_colorStringCount", "0", CVAR_INTERNAL | CVAR_ROM | CVAR_ARCHIVE);
-	cl_colorStringRandom = Cvar_Get("cl_colorStringRandom", "2", CVAR_ARCHIVE, "Randomness of the colors changing, higher numbers are less random");
-
 	cl_logChat = Cvar_Get("cl_logChat", "0", CVAR_ARCHIVE, "Toggle engine chat logs");
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	cl_discordRichPresence = Cvar_Get("cl_discordRichPresence", "1", CVAR_ARCHIVE, "Allow/disallow sharing current game information on Discord profile status");
+#endif
 
 	//
 	// register our commands
@@ -3328,10 +3375,10 @@ void CL_Init( void ) {
 	Cmd_SetCommandCompletionFunc("playdemo", CL_CompleteDemoName);
 	Cmd_AddCommand("deletedemo", CL_DelDemo_f, "Delete a demo");
 	Cmd_SetCommandCompletionFunc("deletedemo", CL_CompleteDemoName);
+	Cmd_AddCommand ("demo_restart", CL_DemoRestart_f, "Restarts the current or last-played demo" );
 	Cmd_AddCommand ("stoprecord", CL_StopRecord_f, "Stop recording a demo" );
 	Cmd_AddCommand ("configstrings", CL_Configstrings_f, "Prints the configstrings list" );
 	Cmd_AddCommand ("clientinfo", CL_Clientinfo_f, "Prints the userinfo variables" );
-	Cmd_AddCommand ("fs_restart", CL_Fs_Restart_f, "Restart the filesystem" );
 	Cmd_AddCommand ("snd_restart", CL_Snd_Restart_f, "Restart sound" );
 	Cmd_AddCommand ("vid_restart", CL_Vid_Restart_f, "Restart the renderer - or change the resolution" );
 	Cmd_AddCommand ("loadmod", CL_Mod_Restart_f, "Restart the renderer (with specified mod folder) - or change the resolution");
@@ -3369,6 +3416,13 @@ void CL_Init( void ) {
 
 	CL_GenerateQKey(); //loda fixme, malware warning!
 	CL_UpdateGUID( NULL, 0 );
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	if (cl_discordRichPresence->integer) {
+		CL_DiscordInitialize();
+		cls.discordInitialized = qtrue;
+	}
+#endif
 
 //	Com_Printf( "----- Client Initialization Complete -----\n" );
 }
@@ -3408,7 +3462,6 @@ void CL_Shutdown( void ) {
 	Cmd_RemoveCommand ("cmd");
 	Cmd_RemoveCommand ("configstrings");
 	Cmd_RemoveCommand ("clientinfo");
-	Cmd_RemoveCommand ("fs_restart");
 	Cmd_RemoveCommand ("snd_restart");
 	Cmd_RemoveCommand ("vid_restart");
 	Cmd_RemoveCommand ("disconnect");
@@ -3416,6 +3469,7 @@ void CL_Shutdown( void ) {
 	Cmd_RemoveCommand ("demo");
 	Cmd_RemoveCommand ("playdemo");
 	Cmd_RemoveCommand ("deletedemo");
+	Cmd_RemoveCommand ("demo_restart");
 	Cmd_RemoveCommand ("cinematic");
 	Cmd_RemoveCommand ("stoprecord");
 	Cmd_RemoveCommand ("connect");
@@ -3439,6 +3493,11 @@ void CL_Shutdown( void ) {
 	Cmd_RemoveCommand("colorstring");
 	Cmd_RemoveCommand("colorname");
 
+#if defined(DISCORD) && !defined(_DEBUG)
+	if (cl_discordRichPresence->integer || cls.discordInitialized)
+		CL_DiscordShutdown();
+#endif
+
 	CL_ShutdownInput();
 	Con_Shutdown();
 
@@ -3453,30 +3512,6 @@ void CL_Shutdown( void ) {
 
 }
 
-void QDECL CL_LogPrintf(fileHandle_t fileHandle, const char *fmt, ...) {
-	va_list argptr;
-	char string[1024] = { 0 };
-	size_t len;
-	time_t rawtime;
-	time(&rawtime);
-
-	if (clc.demoplaying)
-		return;
-	
-	strftime(string, sizeof(string), "[%Y-%m-%d] [%H:%M:%S] ", localtime(&rawtime));
-
-	len = strlen(string);
-
-	va_start(argptr, fmt);
-	Q_vsnprintf(string + len, sizeof(string) - len, fmt, argptr);
-	va_end(argptr);
-
-	if (!fileHandle)
-		return;
-
-	FS_Write(string, strlen(string), fileHandle);
-}
-
 qboolean CL_ConnectedToRemoteServer( void ) {
 	return (qboolean)( com_sv_running && !com_sv_running->integer && cls.state >= CA_CONNECTED && !clc.demoplaying );
 }
@@ -3484,8 +3519,8 @@ qboolean CL_ConnectedToRemoteServer( void ) {
 static void CL_SetServerInfo(serverInfo_t *server, const char *info, int ping) {
 	if (server) {
 		if (info) {
-			char * filteredHostName = Info_ValueForKey(info, "hostname");
-			if (Q_stricmp(filteredHostName, "")) { 
+			char *filteredHostName = Info_ValueForKey(info, "hostname");
+			if (strlen(filteredHostName)) {
 				Q_strstrip(filteredHostName, "\xac\x82\xe2\xa2\x80", NULL);
 				while (*filteredHostName == '\x20' || *filteredHostName == '\x2e') *filteredHostName++;
 			}
@@ -3985,7 +4020,8 @@ void CL_GlobalServers_f( void ) {
 	to.type = NA_IP;
 	to.port = BigShort(PORT_MASTER);
 
-	Com_Printf( "Requesting servers from the master %s (%s)...\n", masteraddress, NET_AdrToString( to ) );
+	if (com_developer && com_developer->integer)
+		Com_Printf( "Requesting servers from the master %s (%s)...\n", masteraddress, NET_AdrToString( to ) );
 
 	cls.numglobalservers = -1;
 	cls.pingUpdateSource = AS_GLOBAL;

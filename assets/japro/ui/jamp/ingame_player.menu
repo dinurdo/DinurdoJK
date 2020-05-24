@@ -41,6 +41,7 @@
 		{ 
 			uiScript				update "ui_GetName"
 			uiScript				updateForceStatus
+			uiScript				getcharcvars
 			hide					highlights
 		}
 		onClose 
@@ -185,6 +186,37 @@
 			}
 		}
 
+//Name of currently selected model -Art		
+		itemDef 
+		{
+			name				modelname
+			style				0	
+			cvar				model
+			rect				50 50 160 20
+			textalign			ITEM_ALIGN_LEFT
+			textalignx			-28
+			textaligny			205
+			outlinecolor		1 .5 .5 .5
+			backcolor			0 0 0 0
+			font				2
+			textscale			.5
+			forecolor			1 .682 0 1
+			border				0
+			bordercolor			0 0 0 0
+			//descText			"Currently selected model"
+			cvarTest            "ui_selectedModelIndex"
+            hideCvar			
+			{
+			"-1"
+			}
+			visible				1 
+			decoration
+			action 
+			{ 
+				play			"sound/interface/button1"
+			}
+		}
+
 //------------------------------------------------------------------------------------------------
 // Skin/Team Color Chooser
 //------------------------------------------------------------------------------------------------
@@ -279,7 +311,7 @@
 			visible 			1
 			textscale 			0.7
 			action 
-			{ 
+			{
 				play			"sound/interface/button1"
 			}
 			mouseenter 
@@ -355,7 +387,7 @@
 			type				ITEM_TYPE_EDITFIELD
 			text				"Default Male Model:"
 			cvar				cg_defaultModel
-			rect				415 151 160 20
+			rect				415 150 160 20
 			textalign			ITEM_ALIGN_RIGHT
 			textalignx			118
 			textaligny			0
@@ -365,7 +397,7 @@
 			visible				1
 			descText			"Lets you specify the default male playermodel."
 			cvarTest			ui_RGBSkin
-			hideCvar			{ 1 }
+			hideCvar			{ 1, 2 }
 			action
 			{
 				play			"sound/interface/button1.wav" ;
@@ -378,7 +410,7 @@
 			type				ITEM_TYPE_EDITFIELD
 			text				"Default Female:"
 			cvar				cg_defaultFemaleModel
-			rect				415 171 160 20
+			rect				415 170 160 20
 			textalign			ITEM_ALIGN_RIGHT
 			textalignx			118
 			textaligny			0
@@ -388,7 +420,7 @@
 			visible				1
 			descText			"Lets you specify the default female playermodel."
 			cvarTest			ui_RGBSkin
-			hideCvar			{ 1 }
+			hideCvar			{ 1, 2 }
 			action
 			{
 				play			"sound/interface/button1.wav" ;
@@ -406,7 +438,7 @@
 				@MENUS_OFF 0
 				@MENUS_ON 1
 			}
-			rect				425 191 160 20
+			rect				425 190 160 20
 			textalign			ITEM_ALIGN_RIGHT
 			textalignx			118
 			textaligny			0
@@ -416,7 +448,7 @@
 			visible				1
 			descText			@MENUS_DEFERS_LOADING_OF_NEW
 			cvarTest			ui_RGBSkin
-			hideCvar			{ 1 }
+			hideCvar			{ 1, 2 }
 			action
 			{
 				play			"sound/interface/button1.wav" ;
@@ -434,7 +466,7 @@
 				@MENUS_OFF 0
 				@MENUS_ON 1
 			}
-			rect				425 211 160 20
+			rect				425 210 160 20
 			textalign			ITEM_ALIGN_RIGHT
 			textalignx			118
 			textaligny			0
@@ -444,7 +476,7 @@
 			visible				1
 			descText			@MENUS_FORCE_ALL_PLAYER_MODELS
 			cvarTest			ui_RGBSkin
-			hideCvar			{ 1 }
+			hideCvar			{ 2 }
 			action
 			{
 				play			"sound/interface/button1.wav" ;
@@ -457,7 +489,7 @@
 			type				ITEM_TYPE_EDITFIELD
 			text				"Force Ally Model:"
 			cvar				cg_forceAllyModel
-			rect				425 231 160 20
+			rect				425 230 160 20
 			textalign			ITEM_ALIGN_RIGHT
 			textalignx			118
 			textaligny			0
@@ -467,7 +499,7 @@
 			visible				1
 			descText			"Lets you force playermodel for allies."
 			cvarTest			ui_RGBSkin //cg_forceModel
-			hideCvar			{ 1 }
+			hideCvar			{ 2 }
 			action
 			{
 				play			"sound/interface/button1.wav" ;
@@ -480,7 +512,7 @@
 			type				ITEM_TYPE_EDITFIELD
 			text				"Force Enemy Model:"
 			cvar				cg_forceEnemyModel
-			rect				425 251 160 20
+			rect				425 250 160 20
 			textalign			ITEM_ALIGN_RIGHT
 			textalignx			118
 			textaligny			0
@@ -490,7 +522,109 @@
 			visible				1
 			descText			"Lets you force playermodel for enemies."
 			cvarTest			ui_RGBSkin //cg_forceModel
-			hideCvar			{ 1 }
+			hideCvar			{ 2 }
+			action
+			{
+				play			"sound/interface/button1.wav" ;
+			}
+		}
+
+		itemDef
+		{
+			name				deferModels2
+			type				ITEM_TYPE_MULTI
+			text				@MENUS_DEFER_PLAYER_MODELS
+			cvar				cg_deferPlayers
+			cvarFloatList
+			{
+				@MENUS_OFF 0
+				@MENUS_ON 1
+			}
+			rect				425 170 160 20
+			textalign			ITEM_ALIGN_RIGHT
+			textalignx			118
+			textaligny			0
+			font				4
+			textscale			1
+			forecolor			.615 .615 .956 1
+			visible				1
+			descText			@MENUS_DEFERS_LOADING_OF_NEW
+			cvarTest			ui_RGBSkin
+			hideCvar			{ 1, 0 }
+			action
+			{
+				play			"sound/interface/button1.wav" ;
+			}
+		}
+		
+		itemDef
+		{
+			name				forceModels2
+			type				ITEM_TYPE_MULTI
+			text				@MENUS_FORCE_PLAYER_MODELS
+			cvar				cg_forceModel
+			cvarFloatList
+			{
+				@MENUS_OFF 0
+				@MENUS_ON 1
+			}
+			rect				425 190 160 20
+			textalign			ITEM_ALIGN_RIGHT
+			textalignx			118
+			textaligny			0
+			font				4
+			textscale			1
+			forecolor			.615 .615 .956 1
+			visible				1
+			descText			@MENUS_FORCE_ALL_PLAYER_MODELS
+			cvarTest			ui_RGBSkin
+			showCvar			{ 2 }
+			action
+			{
+				play			"sound/interface/button1.wav" ;
+			}
+		}
+		
+		itemDef
+		{
+			name				forceAlly2
+			type				ITEM_TYPE_EDITFIELD
+			text				"Force Ally Model:"
+			cvar				cg_forceAllyModel
+			rect				425 210 160 20
+			textalign			ITEM_ALIGN_RIGHT
+			textalignx			118
+			textaligny			0
+			font				4
+			textscale			1
+			forecolor			.615 .615 .956 1
+			visible				1
+			descText			"Lets you force playermodel for allies."
+			cvarTest			ui_RGBSkin //cg_forceModel
+			showCvar			{ 2 }
+			action
+			{
+				play			"sound/interface/button1.wav" ;
+			}
+		}
+		
+		itemDef
+		{
+			name				forceEnemy2
+			type				ITEM_TYPE_EDITFIELD
+			text				"Force Enemy Model:"
+			cvar				cg_forceEnemyModel
+			rect				425 230 160 20
+			textalign			ITEM_ALIGN_RIGHT
+			textalignx			118
+			textaligny			0
+			font				4
+			textscale			1
+			forecolor			.615 .615 .956 1
+			visible				1
+			descText			"Lets you force playermodel for enemies."
+			cvarTest			ui_RGBSkin //cg_forceModel
+			showCvar			{ 2 }
 			action
 			{
 				play			"sound/interface/button1.wav" ;
@@ -514,7 +648,7 @@
 			// appearance_slot	3
 			descText			"Red component in RGB colors"
 			cvarTest			ui_RGBSkin
-			hideCvar			{ 0 }
+			hideCvar			{ 0, 2 }
 			
 			action 
 			{ 
@@ -539,7 +673,7 @@
 			// appearance_slot	3
 			descText			"Green component in RGB colors"
 			cvarTest			ui_RGBSkin
-			hideCvar			{ 0 }
+			hideCvar			{ 0, 2 }
 
 			action 
 			{ 
@@ -563,7 +697,7 @@
 			visible				1
 			descText			"Blue component in RGB colors"
 			cvarTest			ui_RGBSkin
-			hideCvar			{ 0 }
+			hideCvar			{ 0, 2 }
 			
 			action 
 			{ 
@@ -593,7 +727,7 @@
 			visible 			1
 			descText			"Red component Value"
 			cvarTest			ui_RGBSkin
-			hideCvar			{ 0 }
+			hideCvar			{ 0, 2 }
 			
 			action 
 			{ 
@@ -624,7 +758,7 @@
 			visible 			1
 			descText			"Green component Value"
 			cvarTest			ui_RGBSkin
-			hideCvar			{ 0 }
+			hideCvar			{ 0, 2 }
 			
 			action 
 			{ 
@@ -655,7 +789,7 @@
 			visible 			1
 			descText			"Blue component Value"
 			cvarTest			ui_RGBSkin
-			hideCvar			{ 0 }
+			hideCvar			{ 0, 2 }
 			
 			action 
 			{ 

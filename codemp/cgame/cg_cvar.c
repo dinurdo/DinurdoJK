@@ -53,39 +53,40 @@ static void CG_TeamOverlayChange( void ) {
 		trap->Cvar_Set( "teamoverlay", "0" );
 }
 
-void CG_Set2DRatio(void) {
-	if (cl_ratioFix.integer) // shared with UI module
-		cgs.widthRatioCoef = (float)(SCREEN_WIDTH * cgs.glconfig.vidHeight) / (float)(SCREEN_HEIGHT * cgs.glconfig.vidWidth);
-	else
-		cgs.widthRatioCoef = 1.0f;
-}
-
+extern void CG_ClearThirdPersonDamp(void);
+extern void UI_Set2DRatio(void);
 extern void CG_LoadHud_f(void);
 static void CG_UpdateHUD(void) {
-	if (cg.snap && cg_hudFiles.integer != 1 && cg_hudFiles.integer != 2)
-		CG_LoadHud_f();
-	else
-		return;
-}
-
-static void CG_UpdateSpecCamera(void) {
-	if ((cg.predictedPlayerState.pm_flags & PMF_FOLLOW) && cg_specCameraMode.integer) {
-		trap->Cvar_Set( "cg_specCameraMode", "0" ); //Make sure this is off
+	cgs.newHud = qfalse;
+	if (VALIDSTRING(cg_hudFiles.string) && strlen(cg_hudFiles.string) > 0) {
+		switch (cg_hudFiles.string[0]) {
+			default: break;
+			case '1':
+			case '2':
+				cgs.newHud = qtrue;
+				return;
+			case '0':
+			case '3':
+				cgs.newHud = qtrue;
+				break;
+		}
 	}
+
+	CG_LoadHud_f();
 }
 
 //Strafehelper colors
 static void CG_CrosshairColorChange(void) {
 	int i;
 	if (sscanf(cg_crosshairColor.string, "%f %f %f %f", &cg.crosshairColor[0], &cg.crosshairColor[1], &cg.crosshairColor[2], &cg.crosshairColor[3]) != 4) {
-		cg.crosshairColor[0] = 255;
-		cg.crosshairColor[1] = 255;
-		cg.crosshairColor[2] = 255;
+		cg.crosshairColor[0] = 0;
+		cg.crosshairColor[1] = 0;
+		cg.crosshairColor[2] = 0;
 		cg.crosshairColor[3] = 255;
 	}
 
-	for (i=0; i<4; i++) {
-		if (cg.crosshairColor[i] < 0)
+	for (i = 0; i < 4; i++) {
+		if (cg.crosshairColor[i] < 1)
 			cg.crosshairColor[i] = 0;
 		else if (cg.crosshairColor[i] > 255)
 			cg.crosshairColor[i] = 255;
@@ -108,7 +109,7 @@ static void CG_StrafeHelperActiveColorChange(void) {
 		cg.strafeHelperActiveColor[3] = 200;
 	}
 
-	for (i=0; i<4; i++) {
+	for (i = 0; i < 4; i++) {
 		if (cg.strafeHelperActiveColor[i] < 0)
 			cg.strafeHelperActiveColor[i] = 0;
 		else if (cg.strafeHelperActiveColor[i] > 255)
@@ -128,7 +129,6 @@ static void CG_StrafeHelperActiveColorChange(void) {
 	//Com_Printf("New color is %f, %f, %f, %f\n", cg.strafeHelperActiveColor[0], cg.strafeHelperActiveColor[1], cg.strafeHelperActiveColor[2], cg.strafeHelperActiveColor[3]);
 }
 
-//#ifndef __linux__
 #ifdef WIN32
 #include "windows.h"
 #define PATCH(addr, value, type) { type patch = value; MemoryPatch((void *)addr, (void *)&patch, sizeof(type)); }
@@ -181,6 +181,21 @@ static void CG_MemoryPatchChange(void) {
 	}
 }
 #endif
+
+static void CVU_ForceOwnSaber(void)
+{ //maybe make this load and validate the specified hilt file? fallback if it doesn't?
+	int len = strlen(cg_forceOwnSaber.string);
+
+	if (len > MAX_QPATH || !Q_stricmp(cg_forceOwnSaber.string, "0")) {
+		trap->Cvar_Set("cg_forceOwnSaber", "none");
+		return;
+	}
+
+	if (!cg.snap)
+		return; //since we're already expecting to load our clientinfo
+
+	CG_NewClientInfo(cg.clientNum, qtrue); //dunno why the one in JA++ didn't have this
+}
 
 //
 // Cvar table

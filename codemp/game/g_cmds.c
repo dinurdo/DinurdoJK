@@ -268,7 +268,7 @@ Returns a player number for either a number or name string
 Returns -1 if invalid
 ==================
 */
-static int JP_ClientNumberFromString(gentity_t *to, const char *s) 
+int JP_ClientNumberFromString(gentity_t *to, const char *s) 
 {
 	gclient_t	*cl;
 	int			idnum, i, match = -1;
@@ -300,7 +300,7 @@ static int JP_ClientNumberFromString(gentity_t *to, const char *s)
 
 	// numeric values are just slot numbers
 	if (s[0] >= '0' && s[0] <= '9' && strlen(s) == 1) //changed this to only recognize numbers 0-31 as client numbers, otherwise interpret as a name, in which case sanitize2 it and accept partial matches (return error if multiple matches)
-		{
+	{
 		idnum = atoi( s );
 		cl = &level.clients[idnum];
 		if ( cl->pers.connected != CON_CONNECTED ) {
@@ -711,10 +711,14 @@ QINLINE void ResetPlayerTimers(gentity_t *ent, qboolean print)
 	if (ent->client->sess.raceMode) {
 		VectorClear(ent->client->ps.velocity); //lel
 		ent->client->ps.duelTime = 0;
-		ent->client->ps.stats[STAT_RESTRICTIONS] = 0; //meh
-		//if (ent->client->ps.fd.forcePowerLevel[FP_LEVITATION] == 3) { //this is a sad hack..
 		if (!ent->client->pers.practice) {
 			ent->client->ps.powerups[PW_YSALAMIRI] = 0; //beh, only in racemode so wont fuck with ppl using amtele as checkpoints midcourse
+			ent->client->ps.stats[STAT_RESTRICTIONS] = 0; //meh
+			if (ent->client->savedJumpLevel && ent->client->ps.fd.forcePowerLevel[FP_LEVITATION] != ent->client->savedJumpLevel) {
+				ent->client->ps.fd.forcePowerLevel[FP_LEVITATION] = ent->client->savedJumpLevel;
+				//trap->SendServerCommand(ent-g_entities, va("print \"Restored saved jumplevel (%i).\n\"", ent->client->savedJumpLevel));
+				ent->client->savedJumpLevel = 0;
+			}
 		}
 		ent->client->ps.powerups[PW_FORCE_BOON] = 0;
 		ent->client->pers.haste = qfalse;
@@ -807,10 +811,10 @@ void Cmd_Noclip_f( gentity_t *ent ) {
 			if (!target->client || target->client->ps.m_iVehicleNum)
 				return;
 			trap->SendServerCommand(target-g_entities, va("print \"%s\n\"", target->client->noclip ? "noclip OFF" : "noclip ON"));
-			if (target->client->sess.raceMode && target->client->noclip)
+			if (target->client->sess.raceMode && target->client->noclip && !target->client->pers.practice)
 				AmTeleportPlayer( target, target->client->ps.origin, target->client->ps.viewangles, qtrue, qtrue, qfalse ); //Good
 			target->client->noclip = !target->client->noclip;
-			if (!sv_cheats.integer)
+			if (!sv_cheats.integer && !target->client->pers.practice)
 				ResetPlayerTimers(target, qtrue);
 			return;
 		}
@@ -818,10 +822,10 @@ void Cmd_Noclip_f( gentity_t *ent ) {
 			if (ent->client->ps.m_iVehicleNum)
 				return;
 			trap->SendServerCommand(ent-g_entities, va("print \"%s\n\"", ent->client->noclip ? "noclip OFF" : "noclip ON"));
-			if (ent->client->sess.raceMode && ent->client->noclip)
+			if (ent->client->sess.raceMode && ent->client->noclip && !ent->client->pers.practice)
 				AmTeleportPlayer( ent, ent->client->ps.origin, ent->client->ps.viewangles, qtrue, qtrue, qfalse ); //Good
 			ent->client->noclip = !ent->client->noclip;
-			if (!sv_cheats.integer)
+			if (!sv_cheats.integer && !ent->client->pers.practice)
 				ResetPlayerTimers(ent, qtrue);
 			return;
 		}
@@ -830,10 +834,10 @@ void Cmd_Noclip_f( gentity_t *ent ) {
 		if (ent->client->ps.m_iVehicleNum)
 			return;
 		trap->SendServerCommand(ent-g_entities, va("print \"%s\n\"", ent->client->noclip ? "noclip OFF" : "noclip ON"));
-		if (ent->client->sess.raceMode && ent->client->noclip)
+		if (ent->client->sess.raceMode && ent->client->noclip && !ent->client->pers.practice)
 			AmTeleportPlayer( ent, ent->client->ps.origin, ent->client->ps.viewangles, qtrue, qtrue, qfalse ); //Good
 		ent->client->noclip = !ent->client->noclip;
-		if (!sv_cheats.integer)
+		if (!sv_cheats.integer && !ent->client->pers.practice)
 			ResetPlayerTimers(ent, qtrue);
 	}
 	else if (allowed) { //Cheats enabled only
@@ -2590,7 +2594,7 @@ void Cmd_Where_f( gentity_t *ent ) {
 	//trap->SendServerCommand( ent-g_entities, va("print \"%s\n\"", vtos( ent->s.origin ) ) );
 }
 
-static const char *gameNames[] = {
+static const char *gameNames[GT_MAX_GAME_TYPE] = {
 	"Free For All",
 	"Holocron FFA",
 	"Jedi Master",
@@ -2708,7 +2712,7 @@ void Cmd_MapList_f( gentity_t *ent ) {
 		Q_strncpyz( map, Info_ValueForKey( level.arenas.infos[i], "map" ), sizeof( map ) );
 		Q_StripColor( map );
 
-		if ( G_DoesMapSupportGametype( map, level.gametype ) ) {
+		if ( G_DoesMapSupportGametype( map, level.gametype ) || (g_tweakVote.integer & TV_IGNOREMAPARENAS) ) {  //ARGH?
 			char *tmpMsg = va( " ^%c%s", (++toggle&1) ? COLOR_GREEN : COLOR_YELLOW, map );
 			if ( strlen( buf ) + strlen( tmpMsg ) >= sizeof( buf ) ) {
 				trap->SendServerCommand( ent-g_entities, va( "print \"%s\"", buf ) );
@@ -2879,7 +2883,7 @@ qboolean G_VoteMap( gentity_t *ent, int numArgs, const char *arg1, const char *a
 	}
 	trap->FS_Close( fp );
 
-	if ( !G_DoesMapSupportGametype( arg2, level.gametype ) /*&& !(g_tweakVote.integer & TV_FIX_GAMETYPEMAP)*/ ) { //new TV for check arena file for matching gametype?
+	if ( !G_DoesMapSupportGametype( arg2, level.gametype ) && !(g_tweakVote.integer & TV_IGNOREMAPARENAS) ) { //new TV for check arena file for matching gametype?
 		//Logic, this is not needed because we have live update gametype?
 		trap->SendServerCommand( ent-g_entities, va( "print \"%s\n\"", G_GetStringEdString( "MP_SVGAME", "NOVOTE_MAPNOTSUPPORTEDBYGAME" ) ) );
 		return qfalse;
@@ -4874,52 +4878,55 @@ void Cmd_Amlogin_f(gentity_t *ent)
 	}
 	if (trap->Argc() == 2)
 	{
-		if (ent->client->sess.accountFlags == g_juniorAdminLevel.integer || ent->client->sess.accountFlags == g_fullAdminLevel.integer) {
-			trap->SendServerCommand(ent - g_entities, "print \"You are already logged in. Type in /amLogout to remove admin status.\n\"");
-			return;
-		}
+		qboolean added = qfalse; //Check if they would gain anything from logging in, return if not.
+		int i;
+
 		if (!Q_stricmp(pass, "")) {
 			trap->SendServerCommand(ent - g_entities, "print \"Usage: amLogin <password>\n\"");
-			return;
 		}
-		if (!Q_stricmp(pass, g_juniorAdminPass.string)) {
-			int i;
-
-			if (!Q_stricmp("", g_juniorAdminPass.string))
-				return;
-
-			for (i=0; i<=JAPRO_MAX_ADMIN_BITS; i++) {//Loop this 0-22 is admin flags.
-				if (g_juniorAdminLevel.integer & (1 << i)) {
-					ent->client->sess.accountFlags |= (1 << i);
-				}
-			}
-
-			if (Q_stricmp(g_juniorAdminMsg.string, ""))
-				trap->SendServerCommand(-1, va("print \"%s^7 has logged in %s\n\"", ent->client->pers.netname, g_juniorAdminMsg.string));
-			else
-				trap->SendServerCommand(ent - g_entities, "print \"^2You are now logged in with junior admin privileges.\n\"");
-			return;
-		}
-		if (!Q_stricmp(pass, g_fullAdminPass.string)) {
-			int i;
-
-			if (!Q_stricmp("", g_fullAdminPass.string))//dunno
-				return;
-
+		else if (!Q_stricmp(pass, g_fullAdminPass.string)) {
 			for (i=0; i<=JAPRO_MAX_ADMIN_BITS; i++) {//Loop this 0-22 is admin flags.
 				if (g_fullAdminLevel.integer & (1 << i)) {
-					ent->client->sess.accountFlags |= (1 << i);
+					if (!(ent->client->sess.accountFlags & (1 << i))) { //They don't already have it
+						added = qtrue;
+						ent->client->sess.accountFlags |= (1 << i);
+					}
 				}
 			}
 
-			if (Q_stricmp(g_fullAdminMsg.string, "")) //Ok, so just set this to " " if you want it to print the normal login msg, or set it to "" to skip.  or "with junior admin" for more info.. etc
-				trap->SendServerCommand(-1, va("print \"%s^7 has logged in %s\n\"", ent->client->pers.netname, g_fullAdminMsg.string));
-			else
-				trap->SendServerCommand(ent - g_entities, "print \"^2You are now logged in with full admin privileges.\n\"");
-			return;
+			if (added) {
+				if (Q_stricmp(g_fullAdminMsg.string, "")) //Ok, so just set this to " " if you want it to print the normal login msg, or set it to "" to skip.  or "with junior admin" for more info.. etc
+					trap->SendServerCommand(-1, va("print \"%s^7 has logged in %s\n\"", ent->client->pers.netname, g_fullAdminMsg.string));
+				else
+					trap->SendServerCommand(ent - g_entities, "print \"^2You are now logged in with full admin privileges.\n\"");
+				}
+			else {
+				trap->SendServerCommand(ent - g_entities, "print \"You are already logged in. Type in /amLogout to remove admin status.\n\"");
+			}
 		}
+		else if (!Q_stricmp(pass, g_juniorAdminPass.string)) {
+			for (i=0; i<=JAPRO_MAX_ADMIN_BITS; i++) {//Loop this 0-22 is admin flags.
+				if (g_juniorAdminLevel.integer & (1 << i)) {
+					if (!(ent->client->sess.accountFlags & (1 << i))) { //They don't already have it
+						added = qtrue;
+						ent->client->sess.accountFlags |= (1 << i);
+					}
+				}
+			}
 
-		trap->SendServerCommand(ent - g_entities, "print \"^3Failed to log in: Incorrect password!\n\"");
+			if (added) {
+				if (Q_stricmp(g_juniorAdminMsg.string, ""))
+					trap->SendServerCommand(-1, va("print \"%s^7 has logged in %s\n\"", ent->client->pers.netname, g_juniorAdminMsg.string));
+				else
+					trap->SendServerCommand(ent - g_entities, "print \"^2You are now logged in with junior admin privileges.\n\"");
+				}
+			else {
+				trap->SendServerCommand(ent - g_entities, "print \"You are already logged in. Type in /amLogout to remove admin status.\n\"");
+			}
+		}
+		else {
+			trap->SendServerCommand(ent - g_entities, "print \"^3Failed to log in: Incorrect password!\n\"");
+		}
 	}
 }
 //[JAPRO - Serverside - All - Amlogin Function - End]
@@ -6765,7 +6772,7 @@ static void Cmd_Ysal_f(gentity_t *ent)
 		ent->client->ps.powerups[PW_YSALAMIRI] = 0;
 	}
 	else {
-		ent->client->ps.powerups[PW_YSALAMIRI] = 9999999;
+		ent->client->ps.powerups[PW_YSALAMIRI] = level.time + 9999999;
 	}
 }
 
@@ -7073,6 +7080,8 @@ void Cmd_Amtele_f(gentity_t *ent)
 	int allowed;
 
 	if (!ent->client)
+		return;
+	if (ent->client->sess.sessionTeam == TEAM_SPECTATOR && (ent->client->ps.pm_flags & PMF_FOLLOW)) //lazy
 		return;
 
 	allowed = G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_ADMINTELE, qtrue, g_allowRaceTele.integer, "amTele");
@@ -8090,7 +8099,7 @@ void Cmd_ShowNet_f( gentity_t *ent ) { //why does this crash sometimes..? condit
 			}
 		}
 		else {
-			clientnum = atoi(arg1);
+			clientnum = JP_ClientNumberFromString( ent, arg1 );
 		}
 	}
 	else if (trap->Argc() != 1) {

@@ -21,7 +21,8 @@
 	g_blueDamageScale		1	
 	g_yellowDamageScale		1	
 	g_redDamageScale		1	
-	g_redDFADamageScale		1	
+	g_redDFADamageScale		1
+	d_saberSPStyleDamage		0	//Toggle use of SP style damage in normal game.
 
 #### Force 
 	g_tweakForce		0	//Configured with /tweakForce command.
@@ -428,6 +429,7 @@
 	cg_strafeHelper					0	
 	cg_strafeHelper_FPS				0	
 	cg_strafeHelperOffset			75	
+	cg_strafeHelperInvertOffset		75	
 	cg_strafeHelperLineWidth		1	
    	cg_strafeHelperPrecision		256	
 	cg_strafeHelperCutoff			0	

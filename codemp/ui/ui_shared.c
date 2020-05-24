@@ -185,6 +185,32 @@ qboolean UI_OutOfMemory( void ) {
 	return outOfMemory;
 }
 
+void UI_Set2DRatio(void)
+{
+	float ratio = 0.0f;
+	glconfig_t *glconfig;
+
+#ifdef _CGAME
+	glconfig = &cgs.glconfig;
+#elif defined(UI_BUILD)
+	glconfig = &uiInfo.uiDC.glconfig;
+#endif
+
+	if (!glconfig)
+		return;
+
+	if (cl_ratioFix.integer) // shared with UI module
+		ratio = (float)(SCREEN_WIDTH * glconfig->vidHeight) / (float)(SCREEN_HEIGHT * glconfig->vidWidth);
+	else
+		ratio = 1.0f;
+
+#ifdef _CGAME
+	cgs.widthRatioCoef = ratio;
+#elif defined(UI_BUILD)
+	uiInfo.uiDC.widthRatioCoef = ratio;
+#endif
+}
+
 #define HASH_TABLE_SIZE 2048
 /*
 ================
@@ -1550,10 +1576,10 @@ void Menu_TransitionItemByName(menuDef_t *menu, const char *p, const rectDef_t *
 			item->window.offsetTime = time;
 			memcpy(&item->window.rectClient, rectFrom, sizeof(rectDef_t));
 			memcpy(&item->window.rectEffects, rectTo, sizeof(rectDef_t));
-			item->window.rectEffects2.x = abs(rectTo->x - rectFrom->x) / amt;
-			item->window.rectEffects2.y = abs(rectTo->y - rectFrom->y) / amt;
-			item->window.rectEffects2.w = abs(rectTo->w - rectFrom->w) / amt;
-			item->window.rectEffects2.h = abs(rectTo->h - rectFrom->h) / amt;
+			item->window.rectEffects2.x = fabs(rectTo->x - rectFrom->x) / amt;
+			item->window.rectEffects2.y = fabs(rectTo->y - rectFrom->y) / amt;
+			item->window.rectEffects2.w = fabs(rectTo->w - rectFrom->w) / amt;
+			item->window.rectEffects2.h = fabs(rectTo->h - rectFrom->h) / amt;
 
 			Item_UpdatePosition(item);
 		}
@@ -1601,17 +1627,17 @@ void Menu_Transition3ItemByName(menuDef_t *menu, const char *p, const float minx
 
 //				VectorSet(modelptr->g2maxs2, maxx, maxy, maxz);
 
-				modelptr->g2maxsEffect[0] = abs(modelptr->g2maxs2[0] - modelptr->g2maxs[0]) / amt;
-				modelptr->g2maxsEffect[1] = abs(modelptr->g2maxs2[1] - modelptr->g2maxs[1]) / amt;
-				modelptr->g2maxsEffect[2] = abs(modelptr->g2maxs2[2] - modelptr->g2maxs[2]) / amt;
+				modelptr->g2maxsEffect[0] = fabs(modelptr->g2maxs2[0] - modelptr->g2maxs[0]) / amt;
+				modelptr->g2maxsEffect[1] = fabs(modelptr->g2maxs2[1] - modelptr->g2maxs[1]) / amt;
+				modelptr->g2maxsEffect[2] = fabs(modelptr->g2maxs2[2] - modelptr->g2maxs[2]) / amt;
 
-				modelptr->g2minsEffect[0] = abs(modelptr->g2mins2[0] - modelptr->g2mins[0]) / amt;
-				modelptr->g2minsEffect[1] = abs(modelptr->g2mins2[1] - modelptr->g2mins[1]) / amt;
-				modelptr->g2minsEffect[2] = abs(modelptr->g2mins2[2] - modelptr->g2mins[2]) / amt;
+				modelptr->g2minsEffect[0] = fabs(modelptr->g2mins2[0] - modelptr->g2mins[0]) / amt;
+				modelptr->g2minsEffect[1] = fabs(modelptr->g2mins2[1] - modelptr->g2mins[1]) / amt;
+				modelptr->g2minsEffect[2] = fabs(modelptr->g2mins2[2] - modelptr->g2mins[2]) / amt;
 
 
-				modelptr->fov_Effectx = abs(modelptr->fov_x2 - modelptr->fov_x) / amt;
-				modelptr->fov_Effecty = abs(modelptr->fov_y2 - modelptr->fov_y) / amt;
+				modelptr->fov_Effectx = fabs(modelptr->fov_x2 - modelptr->fov_x) / amt;
+				modelptr->fov_Effecty = fabs(modelptr->fov_y2 - modelptr->fov_y) / amt;
 			}
 		}
 	}
@@ -4352,21 +4378,19 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down) {
 		case A_CURSOR_UP:
 			Menu_SetPrevCursorItem(menu);
 			break;
-
 		case A_ESCAPE:
 			if (!g_waitingForKey && menu->onESC) {
 				itemDef_t it;
-		    it.parent = menu;
-		    Item_RunScript(&it, menu->onESC);
+				it.parent = menu;
+				Item_RunScript(&it, menu->onESC);
 			}
-		    g_waitingForKey = qfalse;
+			g_waitingForKey = qfalse;
 			break;
 		case A_TAB:
 		case A_KP_2:
 		case A_CURSOR_DOWN:
 			Menu_SetNextCursorItem(menu);
 			break;
-
 		case A_MOUSE1:
 		case A_MOUSE2:
 			if (item) {
@@ -4375,7 +4399,9 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down) {
 					{
 						Item_Action(item);
 					}
-				} else if (item->type == ITEM_TYPE_EDITFIELD || item->type == ITEM_TYPE_NUMERICFIELD) {
+					break;
+				} 
+				if (item->type == ITEM_TYPE_EDITFIELD || item->type == ITEM_TYPE_NUMERICFIELD) {
 					if (Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory))
 					{
 						Item_Action(item);
@@ -4384,6 +4410,7 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down) {
 						g_editItem = item;
 						//DC->setOverstrikeMode(qtrue);
 					}
+					break;
 				}
 
 	//JLFACCEPT
@@ -4396,7 +4423,7 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down) {
 */
 
 //JLFACCEPT MPMOVED
-				else if ( item->type == ITEM_TYPE_MULTI || item->type == ITEM_TYPE_YESNO || item->type == ITEM_TYPE_SLIDER || item->type == ITEM_TYPE_INTSLIDER)
+				if ( item->type == ITEM_TYPE_MULTI || item->type == ITEM_TYPE_YESNO || item->type == ITEM_TYPE_SLIDER || item->type == ITEM_TYPE_INTSLIDER)
 				{
 					if (Item_HandleAccept(item))
 					{
@@ -4409,14 +4436,22 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down) {
 						it.parent = menu;
 						Item_RunScript(&it, menu->onAccept);
 					}
+					break;
 				}
 //END JLFACCEPT
+				if (key == A_MOUSE2 && !g_waitingForKey && !item->action && menu->onESC) {
+					itemDef_t it;
+					it.parent = menu;
+					Item_RunScript(&it, menu->onESC);
+					g_waitingForKey = qfalse;
+					break;
+				}
 				else {
 					if (Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory))
 					{
-
 						Item_Action(item);
 					}
+					break;
 				}
 			}
 			break;
@@ -5547,7 +5582,7 @@ void Item_Model_Paint(itemDef_t *item)
 
 	// Set up lighting
 	VectorCopy( origin, ent.lightingOrigin );
-	ent.renderfx = RF_LIGHTING_ORIGIN | RF_NOSHADOW;
+	ent.renderfx = RF_LIGHTING_ORIGIN | RF_NOSHADOW | RF_NOLOD;
 
 	DC->addRefEntityToScene( &ent );
 	DC->renderScene( &refdef );
@@ -5712,7 +5747,7 @@ void Item_ListBox_Paint(itemDef_t *item) {
 				if (image)
 				{
 #ifndef _CGAME
-					if (item->window.flags & WINDOW_PLAYERCOLOR)
+					if (item->window.flags & WINDOW_PLAYERCOLOR || ((int)item->special == FEEDER_Q3HEADS && image == uiInfo.uiDC.Assets.defaultIconRGB))
 					{
 						vec4_t	color;
 
@@ -5720,16 +5755,28 @@ void Item_ListBox_Paint(itemDef_t *item) {
 						color[1] = ui_char_color_green.integer/COLOR_MAX;
 						color[2] = ui_char_color_blue.integer/COLOR_MAX;
 						color[3] = 1.0f;
+
 						DC->setColor(color);
 					}
 #endif
 					DC->drawHandlePic(x+1, y+1, listPtr->elementWidth - 2, listPtr->elementHeight - 2, image);
+#ifndef _CGAME
+					if ((int)item->special == FEEDER_Q3HEADS && image == uiInfo.uiDC.Assets.defaultIconRGB)//hackhackhack
+						DC->setColor(NULL);
+#endif
 				}
 
+#ifndef _CGAME
+				if (i == item->cursorPos) {
+					if ((int)item->special != FEEDER_Q3HEADS || ui_selectedModelIndex.integer != -1)
+						DC->drawRect(x, y, listPtr->elementWidth-1, listPtr->elementHeight-1, item->window.borderSize, item->window.borderColor);
+				}
+#else
 				if (i == item->cursorPos)
 				{
 					DC->drawRect(x, y, listPtr->elementWidth-1, listPtr->elementHeight-1, item->window.borderSize, item->window.borderColor);
 				}
+#endif
 
 				sizeWidth -= listPtr->elementWidth;
 				if (sizeWidth < listPtr->elementWidth)
@@ -5813,8 +5860,8 @@ void Item_ListBox_Paint(itemDef_t *item) {
 						image = DC->feederItemImage(item->special, i);
 						if (image)
 						{
-		#ifndef _CGAME
-							if (item->window.flags & WINDOW_PLAYERCOLOR)
+#ifndef _CGAME
+							if (item->window.flags & WINDOW_PLAYERCOLOR || ((int)item->special == FEEDER_Q3HEADS && image == uiInfo.uiDC.Assets.defaultIconRGB))
 							{
 								vec4_t	color;
 
@@ -5824,8 +5871,12 @@ void Item_ListBox_Paint(itemDef_t *item) {
 								color[3] = 1.0f;
 								DC->setColor(color);
 							}
-		#endif
+#endif
 							DC->drawHandlePic(x+1, y+1, listPtr->elementWidth - 2, listPtr->elementHeight - 2, image);
+#ifndef _CGAME
+							if ((int)item->special == FEEDER_Q3HEADS && image == uiInfo.uiDC.Assets.defaultIconRGB)//hackhackhack
+								DC->setColor(NULL);
+#endif
 						}
 
 						if (i == item->cursorPos)
@@ -8246,32 +8297,34 @@ qboolean ItemParse_cvarStrList( itemDef_t *item, int handle ) {
 		return qfalse;
 	}
 
-	if (!Q_stricmp(token.string,"feeder") && item->special == FEEDER_PLAYER_SPECIES)
-	{
+	if (!Q_stricmp(token.string, "feeder")) {
+		if (item->special == FEEDER_PLAYER_SPECIES)
+		{
 #ifndef _CGAME
-		for (; multiPtr->count < uiInfo.playerSpeciesCount; multiPtr->count++)
-		{
-			multiPtr->cvarList[multiPtr->count] = String_Alloc(Q_strupr(va("@MENUS_%s",uiInfo.playerSpecies[multiPtr->count].Name )));	//look up translation
-			multiPtr->cvarStr[multiPtr->count] = uiInfo.playerSpecies[multiPtr->count].Name;	//value
-		}
+			for (; multiPtr->count < uiInfo.playerSpeciesCount; multiPtr->count++)
+			{
+				multiPtr->cvarList[multiPtr->count] = String_Alloc(Q_strupr(va("@MENUS_%s",uiInfo.playerSpecies[multiPtr->count].Name )));	//look up translation
+				multiPtr->cvarStr[multiPtr->count] = uiInfo.playerSpecies[multiPtr->count].Name;	//value
+			}
 #endif
-		return qtrue;
-	}
-	// languages
-	if (!Q_stricmp(token.string,"feeder") && item->special == FEEDER_LANGUAGES)
-	{
+			return qtrue;
+		}
+		// languages
+		if (item->special == FEEDER_LANGUAGES)
+		{
 #ifdef UI_BUILD
-		for (; multiPtr->count < uiInfo.languageCount; multiPtr->count++)
-		{
-			// The displayed text
-			trap->SE_GetLanguageName( (const int) multiPtr->count,(char *) currLanguage[multiPtr->count]  );	// eg "English"
-			multiPtr->cvarList[multiPtr->count] = languageString;
-			// The cvar value that goes into se_language
-			trap->SE_GetLanguageName( (const int) multiPtr->count,(char *) currLanguage[multiPtr->count] );
-			multiPtr->cvarStr[multiPtr->count] = currLanguage[multiPtr->count];
-		}
+			for (; multiPtr->count < uiInfo.languageCount; multiPtr->count++)
+			{
+				// The displayed text
+				trap->SE_GetLanguageName( (const int) multiPtr->count,(char *) currLanguage[multiPtr->count]  );	// eg "English"
+				multiPtr->cvarList[multiPtr->count] = languageString;
+				// The cvar value that goes into se_language
+				trap->SE_GetLanguageName( (const int) multiPtr->count,(char *) currLanguage[multiPtr->count] );
+				multiPtr->cvarStr[multiPtr->count] = currLanguage[multiPtr->count];
+			}
 #endif
-		return qtrue;
+			return qtrue;
+		}
 	}
 
 	if (*token.string != '{') {
@@ -9568,7 +9621,6 @@ void *Display_CaptureItem(int x, int y) {
 	return NULL;
 }
 
-
 // FIXME:
 qboolean Display_MouseMove(void *p, int x, int y) {
 	int i;
@@ -9591,7 +9643,6 @@ qboolean Display_MouseMove(void *p, int x, int y) {
 		Menu_UpdatePosition(menu);
 	}
  	return qtrue;
-
 }
 
 int Display_CursorType(int x, int y) {

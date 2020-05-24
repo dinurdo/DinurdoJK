@@ -74,9 +74,10 @@ static void CG_DrawTrajectoryLine(void);
 #define SPEEDOMETER_JUMPDISTANCE	(1<<3)
 #define SPEEDOMETER_VERTICALSPEED	(1<<4)
 #define SPEEDOMETER_YAWSPEED		(1<<5)
-#define SPEEDOMETER_SPEEDGRAPH		(1<<6)
-#define SPEEDOMETER_KPH				(1<<7)
-#define SPEEDOMETER_MPH				(1<<8)
+#define SPEEDOMETER_ACCELMETER		(1<<6)
+#define SPEEDOMETER_SPEEDGRAPH		(1<<7)
+#define SPEEDOMETER_KPH				(1<<8)
+#define SPEEDOMETER_MPH				(1<<9)
 //japro end
 
 // nmckenzie: DUEL_HEALTH
@@ -183,11 +184,18 @@ int MenuFontToHandle(int iMenuFont)
 }
 
 
-int CG_Text_Width(const char *text, float scale, int iMenuFont)
+float CG_Text_Width(const char *text, float scale, int iMenuFont)
 {
 	int iFontIndex = MenuFontToHandle(iMenuFont);
 
-	return trap->R_Font_StrLenPixels(text, iFontIndex, scale);
+	return trap->ext.R_Font_StrLenPixels(text, iFontIndex, scale);
+}
+
+int CG_Text_WidthInt(const char *text, float scale, int iMenuFont)
+{
+	int iFontIndex = MenuFontToHandle(iMenuFont);
+
+	return (int)trap->ext.R_Font_StrLenPixels(text, iFontIndex, scale);
 }
 
 int CG_Text_Height(const char *text, float scale, int iMenuFont)
@@ -247,7 +255,7 @@ static void CG_DrawZoomMask( void )
 		int val, i;
 		float off;
 
-		if (cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE])
+		if (cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE])
 			return;
 
 		// zoom level
@@ -1718,7 +1726,7 @@ static void CG_DrawSimpleForcePower( const centity_t *cent )
 		if ( cg.forceHUDNextFlashTime < cg.time )
 		{
 			cg.forceHUDNextFlashTime = cg.time + 400;
-			trap->S_StartSound( NULL, 0, CHAN_LOCAL, cgs.media.noforceSound );
+			trap->S_StartLocalSound( cgs.media.noforceSound, CHAN_LOCAL );
 			if ( cg.forceHUDActive )
 			{
 				cg.forceHUDActive = qfalse;
@@ -1743,14 +1751,15 @@ static void CG_DrawSimpleForcePower( const centity_t *cent )
 
 
 	if (cg_hudColors.integer && !flash) { //JAPRO - Clientside - Gradient simple hud coloring
-	vec4_t		colorForce = { 1,    1,     1,     1 };
-	colorForce[0] = 0.8 - (cg.snap->ps.fd.forcePower * 0.0045);
-	colorForce[1] = 0.8 - (cg.snap->ps.fd.forcePower * 0.0045);
+		vec4_t	colorForce = { 1,    1,     1,     1 };
+		colorForce[0] = 0.8 - (cg.snap->ps.fd.forcePower * 0.0045);
+		colorForce[1] = 0.8 - (cg.snap->ps.fd.forcePower * 0.0045);
 
 		CG_DrawProportionalString(SCREEN_WIDTH - (18 + 14 + 32)*cgs.widthRatioCoef, (SCREEN_HEIGHT - 80) + 40 + 14, num, UI_SMALLFONT | UI_DROPSHADOW, colorForce);
 	}
-	else
+	else {
 		CG_DrawProportionalString(SCREEN_WIDTH - (18 + 14 + 32)*cgs.widthRatioCoef, (SCREEN_HEIGHT - 80) + 40 + 14, num, UI_SMALLFONT | UI_DROPSHADOW, colorTable[calcColor]);
+	}
 }
 
 /*
@@ -1778,18 +1787,19 @@ void CG_DrawHUD(centity_t	*cent)
 	//JAPRO - Clientside - Speedometer Start
 	speedometerXPos = cg_speedometerX.integer;
 
-	if (Q_isanumber(cg_hudFiles.string)) {
-		if (cg_hudFiles.integer == 0)
-			speedometerXPos -= 8;
-		else if (cg_hudFiles.integer == 1)
-			speedometerXPos -= 56;
-		else if (cg_hudFiles.integer == 2)
-			speedometerXPos -= 42;
+	if (cgs.newHud) {
+		switch (cg_hudFiles.integer)
+		{
+			case 0: speedometerXPos -= 8; break;
+			case 1: speedometerXPos -= 56; break;
+			case 2: speedometerXPos -= 42; break;
+			default: break;
+		}
 	}
 
 	if (cg_speedometer.integer & SPEEDOMETER_ENABLE) {
 		CG_Speedometer();
-		if (cg_strafeHelper.integer & SHELPER_ACCELMETER)
+		if (cg_speedometer.integer & SPEEDOMETER_ACCELMETER || cg_strafeHelper.integer & SHELPER_ACCELMETER)
 			CG_DrawAccelMeter();
 		if (cg_speedometer.integer & SPEEDOMETER_JUMPHEIGHT)
 			CG_JumpHeight(cent);
@@ -1807,10 +1817,19 @@ void CG_DrawHUD(centity_t	*cent)
 	if (cg_strafeHelper.integer & SHELPER_CROSSHAIR) {
 		vec4_t		hcolor;
 		float		lineWidth;
-		hcolor[0] = cg.crosshairColor[0];
-		hcolor[1] = cg.crosshairColor[1];
-		hcolor[2] = cg.crosshairColor[2];
-		hcolor[3] = cg.crosshairColor[3];
+		
+		if (!cg.crosshairColor[0] && !cg.crosshairColor[1] && !cg.crosshairColor[2]) { //default to white
+			hcolor[0] = 1.0f;
+			hcolor[1] = 1.0f;
+			hcolor[2] = 1.0f;
+			hcolor[3] = 1.0f;
+		}
+		else {
+			hcolor[0] = cg.crosshairColor[0];
+			hcolor[1] = cg.crosshairColor[1];
+			hcolor[2] = cg.crosshairColor[2];
+			hcolor[3] = cg.crosshairColor[3];
+		}
 
 		lineWidth = cg_strafeHelperLineWidth.value;
 		if (lineWidth < 0.25f)
@@ -1833,7 +1852,7 @@ void CG_DrawHUD(centity_t	*cent)
 	if (!cg_drawHud.integer)
 		return;
 	
-	if (cg_drawScore.integer && !(cgs.gametype == GT_POWERDUEL || (cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE]))) {  // JAPRO - Clientside - Add cvar to show player score on HUD.
+	if (cg_drawScore.integer && !(cgs.gametype == GT_POWERDUEL || (cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE]))) {  // JAPRO - Clientside - Add cvar to show player score on HUD.
 		//scoreStr = va("Score: %i", cgs.clientinfo[cg.snap->ps.clientNum].score);
 		if (cgs.gametype == GT_DUEL && cgs.fraglimit > 0)
 		{//A duel that requires more than one kill to knock the current enemy back to the queue
@@ -1930,14 +1949,12 @@ void CG_DrawHUD(centity_t	*cent)
 				}
 
 				CG_DrawProportionalString((x + 16)*cgs.widthRatioCoef, y + 40, va("%i", cg.snap->ps.stats[STAT_HEALTH]), UI_SMALLFONT | UI_DROPSHADOW, colorHealth);
-
 				CG_DrawProportionalString((x + 18 + 14)*cgs.widthRatioCoef, y + 40 + 14, va("%i", cg.snap->ps.stats[STAT_ARMOR]), UI_SMALLFONT | UI_DROPSHADOW, colorArmor);
 
 			}
 			else
 			{
 				CG_DrawProportionalString((x + 16)*cgs.widthRatioCoef, y + 40, va("%i", cg.snap->ps.stats[STAT_HEALTH]), UI_SMALLFONT | UI_DROPSHADOW, colorTable[CT_HUD_RED]);
-
 				CG_DrawProportionalString((x + 18 + 14)*cgs.widthRatioCoef, y + 40 + 14, va("%i", cg.snap->ps.stats[STAT_ARMOR]), UI_SMALLFONT | UI_DROPSHADOW, colorTable[CT_HUD_GREEN]);
 			}
 			//JAPRO - Clientside - Gradient simple hud coloring - End
@@ -3380,7 +3397,7 @@ qboolean CG_DrawVehicleHud( const centity_t *cent )
 	}
 
 	CG_DrawVehicleTurboRecharge( menuHUD, veh );
-	if (cgs.isJAPro && ps->stats[STAT_RACEMODE]) { //JAPRO server, we are in racemode (swoop ofc)
+	if (cgs.serverMod == SVMOD_JAPRO && ps->stats[STAT_RACEMODE]) { //JAPRO server, we are in racemode (swoop ofc)
 		CG_DrawVehicleGravRecharge( menuHUD, veh );
 	}
 	else
@@ -3663,7 +3680,7 @@ static float CG_DrawEnemyInfo ( float y )
 		return y;
 	}
 
-	if (cgs.gametype == GT_POWERDUEL)
+	if (cgs.gametype == GT_POWERDUEL || (cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE]))
 	{ //just get out of here then
 		return y;
 	}
@@ -3808,80 +3825,6 @@ static float CG_DrawEnemyInfo ( float y )
 	}
 
 	return y + BIGCHAR_HEIGHT + 2;
-}
-
-/*
-==================
-CG_DrawSnapshot
-==================
-*/
-static float CG_DrawSnapshot( float y ) {
-	char		*s;
-	int			w;
-	float		xOffset = 0;
-
-	s = va( "time:%i snap:%i cmd:%i", cg.snap->serverTime, 
-		cg.latestSnapshotNum, cgs.serverCommandSequence );
-	w = CG_DrawStrlen( s ) * BIGCHAR_WIDTH;
-
-	CG_DrawBigString(SCREEN_WIDTH - (5 + w - xOffset)*cgs.widthRatioCoef, y + 2, s, 1.0F);
-
-	return y + BIGCHAR_HEIGHT + 4;
-}
-
-/*
-==================
-CG_DrawFPS
-==================
-*/
-#define	FPS_FRAMES	16
-static float CG_DrawFPS( float y ) {
-	char		*s;
-	int			w;
-	static unsigned short previousTimes[FPS_FRAMES];
-	static unsigned short index;
-	static int	previous, lastupdate;
-	int		t, i, fps, total;
-	unsigned short frameTime;
-	const int		xOffset = 0;
-
-
-	// don't use serverTime, because that will be drifting to
-	// correct for internet lag changes, timescales, timedemos, etc
-	t = trap->Milliseconds();
-	frameTime = t - previous;
-	previous = t;
-	if (t - lastupdate > 50)	//don't sample faster than this
-	{
-		lastupdate = t;
-		previousTimes[index % FPS_FRAMES] = frameTime;
-		index++;
-	}
-	// average multiple frames together to smooth changes out a bit
-	total = 0;
-	for ( i = 0 ; i < FPS_FRAMES ; i++ ) {
-		total += previousTimes[i];
-	}
-	if ( !total ) {
-		total = 1;
-	}
-	fps = 1000 * FPS_FRAMES / total;
-
-	s = va( "%ifps", fps );
-//JAPRO - Clientside - Add cg_drawfps 2 - Start
-	if (cg_drawFPS.integer == 1)
-	{	
-		w = CG_DrawStrlen( s ) * BIGCHAR_WIDTH;
-		CG_DrawBigString(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef + xOffset, y + 2, s, 1.0F);
-	}
-	else if (cg_drawFPS.integer > 1)
-	{
-		w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
-		CG_DrawSmallString(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef + xOffset, y + 2, s, 1.0F);
-	}
-//JAPRO - Clientside - Add cg_drawfps 2 - End
-
-	return y + BIGCHAR_HEIGHT + 4;
 }
 
 // nmckenzie: DUEL_HEALTH
@@ -5192,6 +5135,128 @@ float CG_DrawMiniMap(float y)
 }
 
 /*
+==================
+CG_DrawSnapshot
+==================
+*/
+static float CG_DrawSnapshot( float y ) {
+	char		*s;
+	int			w, drawFont = cg_drawFPS.integer ? cg_drawFPS.integer : cg_drawSnapshot.integer;
+
+	s = va( "time:%i snap:%i cmd:%i", cg.snap->serverTime, 
+		cg.latestSnapshotNum, cgs.serverCommandSequence );
+
+	if (drawFont < 4 && trap->R_Language_IsAsian())
+		drawFont = 5;
+
+	switch (drawFont)
+	{
+		default:
+		case 1:
+			w = CG_DrawStrlen(s) * BIGCHAR_WIDTH;
+			CG_DrawBigString(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, 1.0f);
+			break;
+		case 2:
+			w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+			CG_DrawSmallString(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, 1.0f);
+			break;
+		case 3: //smallchar font with dropshadow
+			w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+			CG_DrawStringExt(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, colorWhite, qfalse, qtrue, SMALLCHAR_WIDTH * cgs.widthRatioCoef, SMALLCHAR_HEIGHT, 8);
+			break;
+		case 4:
+			w = CG_Text_Width(s, 1.0f, FONT_SMALL);
+			CG_Text_Paint(SCREEN_WIDTH - 5 - w, y, 1.0f, colorTable[CT_WHITE], s, 0.0f, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_SMALL);
+			return y + CG_Text_Height(s, 1.0f, FONT_SMALL);
+			break;
+		case 5:
+			w = CG_Text_Width(s, 1.0f, FONT_MEDIUM);
+			CG_Text_Paint(SCREEN_WIDTH - 5 - w, y, 1.0f, colorTable[CT_WHITE], s, 0.0f, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_MEDIUM);
+			return y + CG_Text_Height(s, 1.0f, FONT_MEDIUM);
+			break;
+		case 6:
+			w = CG_Text_Width(s, 1.0f, FONT_SMALL2);
+			CG_Text_Paint(SCREEN_WIDTH - 5 - w, y, 1.0f, colorTable[CT_WHITE], s, 0.0f, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_SMALL2);
+			return y + CG_Text_Height(s, 1.0f, FONT_SMALL2);
+			break;
+	}
+
+	return y + BIGCHAR_HEIGHT + 4;
+}
+
+/*
+==================
+CG_DrawFPS
+==================
+*/
+#define	FPS_FRAMES	60 //increased from 16 for accuracy
+static float CG_DrawFPS( float y ) {
+	char		*s;
+	static unsigned short previousTimes[FPS_FRAMES], index;
+	static int	previous;
+	int		t, i, fps, total, w;
+	unsigned short frameTime;
+	int	drawFont = cg_drawFPS.integer;
+
+	// don't use serverTime, because that will be drifting to
+	// correct for internet lag changes, timescales, timedemos, etc
+	t = trap->Milliseconds();
+	frameTime = t - previous;
+	previous = t;
+
+	previousTimes[index % FPS_FRAMES] = frameTime;
+	index++;
+	// average multiple frames together to smooth changes out a bit
+	total = 0;
+	for ( i = 0 ; i < FPS_FRAMES ; i++ ) {
+		total += previousTimes[i];
+	}
+	if ( !total ) {
+		total = 1;
+	}
+	fps = 1000 * FPS_FRAMES / total;
+
+	s = va( "%ifps", fps );
+
+	if (drawFont < 4 && trap->R_Language_IsAsian())
+		drawFont = 5;
+
+	switch (drawFont)
+	{
+		default:
+		case 1:
+			w = CG_DrawStrlen(s) * BIGCHAR_WIDTH;
+			CG_DrawBigString(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, 1.0f);
+			break;
+		case 2:
+			w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+			CG_DrawSmallString(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, 1.0f);
+			break;
+		case 3: //smallchar font with dropshadow
+			w = CG_DrawStrlen( s ) * SMALLCHAR_WIDTH;
+			CG_DrawStringExt(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, colorWhite, qfalse, qtrue, SMALLCHAR_WIDTH * cgs.widthRatioCoef, SMALLCHAR_HEIGHT, 8);
+			break;
+		case 4:
+			w = CG_Text_Width(s, 1.0f, FONT_SMALL);
+			CG_Text_Paint(SCREEN_WIDTH - 5 - w, y, 1.0f, colorTable[CT_WHITE], s, 0.0f, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_SMALL);
+			return y + CG_Text_Height(s, 1.0f, FONT_SMALL);
+			break;
+		case 5:
+			w = CG_Text_Width(s, 1.0f, FONT_MEDIUM);
+			CG_Text_Paint(SCREEN_WIDTH - 5 - w, y, 1.0f, colorTable[CT_WHITE], s, 0.0f, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_MEDIUM);
+			return y + CG_Text_Height(s, 1.0f, FONT_MEDIUM);
+			break;
+		case 6:
+			w = CG_Text_Width(s, 1.0f, FONT_SMALL2);
+			CG_Text_Paint(SCREEN_WIDTH - 5 - w, y, 1.0f, colorTable[CT_WHITE], s, 0.0f, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_SMALL2);
+			return y + CG_Text_Height(s, 1.0f, FONT_SMALL2);
+			break;
+	}
+
+	return y + BIGCHAR_HEIGHT + 4;
+}
+
+/*
 =================
 CG_DrawTimer
 =================
@@ -5200,6 +5265,7 @@ static float CG_DrawTimer( float y ) {
 	char		*s;
 	int			w;
 	int			msec, secs, mins;
+	int			drawTimerStyle = cg_drawFPS.integer ? cg_drawFPS.integer : cg_drawTimer.integer; //style this the same as the fps counter if it's enabled.
 
 	if (cg_drawTimer.integer < 0)
 		msec = cg.time;
@@ -5212,25 +5278,45 @@ static float CG_DrawTimer( float y ) {
 	secs %= 60;
 	msec %= 1000;
 
-	//JAPRO - Clientside - Show MS in map timer. - Start
-
 	s = va("%i:%02i", mins, secs);
 
-	if (cg_drawTimer.integer == 2)
+	if (drawTimerStyle < 4 && trap->R_Language_IsAsian())
+		drawTimerStyle = 5;
+
+	switch (drawTimerStyle)
 	{
-		w = CG_DrawStrlen(s) * SMALLCHAR_WIDTH;
-		CG_DrawSmallString(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, 1.0F);
+		default:
+		case 1:
+			w = CG_DrawStrlen(s) * BIGCHAR_WIDTH;
+			CG_DrawBigString(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, 1.0f);
+			break;
+		case 2:
+			w = CG_DrawStrlen(s) * SMALLCHAR_WIDTH;
+			CG_DrawSmallString(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, 1.0f);
+			break;
+		case 3:
+			w = CG_DrawStrlen(s) * SMALLCHAR_WIDTH;
+			CG_DrawStringExt(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, colorWhite, qfalse, qtrue, SMALLCHAR_WIDTH * cgs.widthRatioCoef, SMALLCHAR_HEIGHT, 0);
+			break;
+		case 4:
+			w = CG_Text_Width(s, 1.0f, FONT_SMALL);
+			CG_Text_Paint(SCREEN_WIDTH - 5 - w, y, 1.0f, colorTable[CT_WHITE], s, 0.0f, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_SMALL);
+			return y + CG_Text_Height(s, 1.0f, FONT_SMALL);
+			break;
+		case 5:
+			w = CG_Text_Width(s, 1.0f, FONT_MEDIUM);
+			CG_Text_Paint(SCREEN_WIDTH - 5 - w, y, 1.0f, colorTable[CT_WHITE], s, 0.0f, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_MEDIUM);
+			return y + CG_Text_Height(s, 1.0f, FONT_MEDIUM);
+			break;
+		case 6:
+			w = CG_Text_Width(s, 1.0f, FONT_SMALL2);
+			CG_Text_Paint(SCREEN_WIDTH - 5 - w, y, 1.0f, colorTable[CT_WHITE], s, 0.0f, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_SMALL2);
+			return y + CG_Text_Height(s, 1.0f, FONT_SMALL2);
+			break;
 	}
-	else
-	{
-		w = CG_DrawStrlen(s) * BIGCHAR_WIDTH;
-		CG_DrawBigString(SCREEN_WIDTH - 5 - w * cgs.widthRatioCoef, y + 2, s, 1.0F);
-	}
-	//JAPRO - Clientside - Show MS in map timer. - End
 
 	return y + BIGCHAR_HEIGHT + 4;
 }
-
 
 /*
 =================
@@ -5303,7 +5389,7 @@ static float CG_DrawTeamOverlay( float y, qboolean right, qboolean upper ) {
 	w = (pwidth + lwidth + 4 + 7) * TINYCHAR_WIDTH*cgs.widthRatioCoef;
 
 	if ( right ) {
-		if (cgs.isJAPro)
+		if (cgs.serverMod == SVMOD_JAPRO)
 			x = cg_drawTeamOverlayX.integer - w - 32;//JAPRO - Clientside - Positionable drawteamoverlay
 		else
 			x = cg_drawTeamOverlayX.integer - w;//JAPRO - Clientside - Positionable drawteamoverlay
@@ -5334,7 +5420,7 @@ static float CG_DrawTeamOverlay( float y, qboolean right, qboolean upper ) {
 		hcolor[3] = 0.33f;
 	}
 	trap->R_SetColor( hcolor );
-	if (cgs.isJAPro)
+	if (cgs.serverMod == SVMOD_JAPRO)
 		CG_DrawPic( x + xOffset, y, w + 32, h, cgs.media.teamStatusBar );
 	else
 		CG_DrawPic( x + xOffset, y, w, h, cgs.media.teamStatusBar );
@@ -5379,7 +5465,7 @@ static float CG_DrawTeamOverlay( float y, qboolean right, qboolean upper ) {
 
 			CG_GetColorForHealth( ci->health, ci->armor, hcolor );
 
-			if (cgs.isJAPro) {
+			if (cgs.serverMod == SVMOD_JAPRO) {
 				int forcepoints = ci->armor % 100, armor = ci->armor;
 				if (!forcepoints) { //sad hack, fix this sometime.. if we are at 0 fp it thinks we are at full or whatever.. cuz %100
 					forcepoints = 100;
@@ -5398,7 +5484,7 @@ static float CG_DrawTeamOverlay( float y, qboolean right, qboolean upper ) {
 			xx = x + TINYCHAR_WIDTH * 3*cgs.widthRatioCoef + 
 				TINYCHAR_WIDTH * pwidth*cgs.widthRatioCoef + TINYCHAR_WIDTH * lwidth*cgs.widthRatioCoef;
 
-			if (cgs.isJAPro) {
+			if (cgs.serverMod == SVMOD_JAPRO) {
 				CG_DrawStringExt( xx + xOffset, y,
 					st, hcolor, qfalse, qfalse,
 					TINYCHAR_WIDTH*cgs.widthRatioCoef, TINYCHAR_HEIGHT, 0 );
@@ -5534,7 +5620,7 @@ static void CG_DrawInventory(int y)
 	if (!cg.snap)
 		return;
 
-	if (cgs.isJAPro && cg.snap->ps.stats[STAT_RACEMODE])
+	if (cgs.serverMod == SVMOD_JAPRO && cg.snap->ps.stats[STAT_RACEMODE])
 		return;
 
 	if (cg.snap->ps.pm_type == PM_SPECTATOR)
@@ -5602,7 +5688,9 @@ static void CG_DrawUpperRight( void ) {
 
 		y = CG_DrawMiniScoreboard ( y );
 
-		y = CG_DrawPowerupIcons(y);
+		if (cg_drawPowerUpIcons.integer) {
+			y = CG_DrawPowerupIcons(y);
+		}
 
 		CG_DrawInventory(y);
 	}
@@ -5619,6 +5707,7 @@ static void CG_DrawReward( void ) {
 	int		i, count;
 	float	x, y;
 	char	buf[32];
+	float	iconSize = ICON_SIZE, time = 0.0f;
 
 	if ( !cg_drawRewards.integer ) {
 		return;
@@ -5641,25 +5730,32 @@ static void CG_DrawReward( void ) {
 		}
 	}
 
+	time = cg.time - cg.rewardTime;
+	if (time <= ITEM_BLOB_TIME) { //fade in
+		iconSize *= time * (1.0/ITEM_BLOB_TIME);
+	}
+	else if (time > 0 && REWARD_TIME - time <= ITEM_BLOB_TIME) { //fade out
+		iconSize *= (REWARD_TIME - time) * (1.0/ITEM_BLOB_TIME);
+	}
+
 	trap->R_SetColor( color );
 
 	if ( cg.rewardCount[0] >= 10 ) {
-		y = 56;
-		x = (SCREEN_WIDTH / 2 ) - ICON_SIZE/2 * cgs.widthRatioCoef;
-		CG_DrawPic( x, y, (ICON_SIZE-4) * cgs.widthRatioCoef, ICON_SIZE-4, cg.rewardShader[0] );
+		y = 56+((ICON_SIZE-iconSize)/2);
+		x = (SCREEN_WIDTH / 2 ) - (iconSize/2) * cgs.widthRatioCoef;
+		CG_DrawPic( x, y, (iconSize-4) * cgs.widthRatioCoef, iconSize-4, cg.rewardShader[0] );
 		Com_sprintf(buf, sizeof(buf), "%d", cg.rewardCount[0]);
 		x = ( SCREEN_WIDTH - SMALLCHAR_WIDTH * CG_DrawStrlen( buf ) * cgs.widthRatioCoef ) / 2;
-		CG_DrawStringExt( x, y+ICON_SIZE, buf, color, qfalse, qtrue,
+		CG_DrawStringExt( x, 104/*y+ICON_SIZE*/, buf, color, qfalse, qtrue,
 								SMALLCHAR_WIDTH * cgs.widthRatioCoef, SMALLCHAR_HEIGHT, 0 );
 	}
 	else {
 		count = cg.rewardCount[0];
-
-		y = 56;
-		x = (SCREEN_WIDTH / 2) - count * (ICON_SIZE/2) * cgs.widthRatioCoef;
+		y = 56+((ICON_SIZE-iconSize)/2);
+		x = (SCREEN_WIDTH / 2) - count * (iconSize/2) * cgs.widthRatioCoef;
 		for ( i = 0 ; i < count ; i++ ) {
-			CG_DrawPic( x, y, (ICON_SIZE-4) * cgs.widthRatioCoef, ICON_SIZE-4, cg.rewardShader[0] );
-			x += ICON_SIZE * cgs.widthRatioCoef;
+			CG_DrawPic( x, y, (iconSize-4) * cgs.widthRatioCoef, iconSize-4, cg.rewardShader[0] );
+			x += iconSize * cgs.widthRatioCoef;
 		}
 	}
 	trap->R_SetColor( NULL );
@@ -5675,7 +5771,7 @@ LAGOMETER
 ===============================================================================
 */
 
-#define	LAG_SAMPLES		128
+#define	LAG_SAMPLES		256
 
 
 struct lagometer_s {
@@ -5686,13 +5782,11 @@ struct lagometer_s {
 	int		snapshotCount;
 } lagometer;
 
-#define	SPEED_SAMPLES		128
+#define	SPEED_SAMPLES		256
 
 typedef struct {
 	int		frameSamples[SPEED_SAMPLES];
 	int		frameCount;
-	int		snapshotSamples[SPEED_SAMPLES];
-	int		snapshotCount;
 } speedgraph_t;
 
 speedgraph_t		speedgraph;
@@ -5713,9 +5807,7 @@ void CG_AddLagometerFrameInfo( void ) {
 }
 
 void CG_AddSpeedGraphFrameInfo( void ) {  //CG_DrawSpeedGraph
-	int xyspeed = cg.currentSpeed;//sqrt((cg.predictedPlayerState.velocity[0] * cg.predictedPlayerState.velocity[0]) + (cg.predictedPlayerState.velocity[1] * cg.predictedPlayerState.velocity[1]));
-
-	speedgraph.frameSamples[ speedgraph.frameCount & ( SPEED_SAMPLES - 1) ] = xyspeed;
+	speedgraph.frameSamples[ speedgraph.frameCount & ( SPEED_SAMPLES - 1) ] = cg.currentSpeed;
 	speedgraph.frameCount++;
 }
 
@@ -5738,6 +5830,12 @@ void CG_AddLagometerSnapshotInfo( snapshot_t *snap ) {
 	}
 
 	// add this snapshot's info
+	if (cg.demoPlayback) { //cgs.svfps is assumed to be 20 if it's not found in serverinfo
+		snap->ping = (snap->serverTime - snap->ps.commandTime) - (1000/cgs.svfps) + lagometer.frameSamples[lagometer.frameCount & (LAG_SAMPLES - 2)];
+		if (snap->ping <= 0)
+			snap->ping = 1;
+	}
+
 	lagometer.snapshotSamples[ lagometer.snapshotCount & ( LAG_SAMPLES - 1) ] = snap->ping;
 	lagometer.snapshotFlags[ lagometer.snapshotCount & ( LAG_SAMPLES - 1) ] = snap->snapFlags;
 	lagometer.snapshotCount++;
@@ -5758,7 +5856,8 @@ static void CG_DrawDisconnect( void ) {
 	int			w;  // bk010215 - FIXME char message[1024];
 	const int REAL_CMD_BACKUP = (cl_commandsize.integer >= 4 && cl_commandsize.integer <= 512 ) ? (cl_commandsize.integer) : (CMD_BACKUP);
 
-	if (cgs.localServer || cg.demoPlayback) return;
+	if (cgs.localServer || cg.demoPlayback)
+		return;
 
 	if (cg.mMapChange)
 	{
@@ -5799,7 +5898,6 @@ static void CG_DrawDisconnect( void ) {
 
 #define	MAX_LAGOMETER_PING	900
 #define	MAX_LAGOMETER_RANGE	300
-
 /*
 ==============
 CG_DrawLagometer
@@ -5809,10 +5907,12 @@ static void CG_DrawLagometer( void ) {
 	int		a, i;
 	float	x, y, v;
 	float	ax, ay, aw, ah, mid, range;
-	int		color;
 	float	vscale;
+	float	avgPing = 0.0f, avgInterp = 0.0f;
+	int		highestPing = 1;
+	int		color;
 
-	if ( !cg_lagometer.integer || cgs.localServer || cg.demoPlayback) {
+	if (!cg_lagometer.integer || cgs.localServer) {
 		CG_DrawDisconnect();
 		return;
 	}
@@ -5847,6 +5947,7 @@ static void CG_DrawLagometer( void ) {
 	for ( a = 0 ; a < aw ; a++ ) {
 		i = ( lagometer.frameCount - 1 - a ) & (LAG_SAMPLES - 1);
 		v = lagometer.frameSamples[i];
+		avgInterp += v;
 		v *= vscale;
 		if ( v > 0 ) {
 			if ( color != 1 ) {
@@ -5869,6 +5970,7 @@ static void CG_DrawLagometer( void ) {
 			trap->R_DrawStretchPic( ax + (aw - a) * cgs.widthRatioCoef, mid, 1.0f * cgs.widthRatioCoef, v, 0, 0, 0, 0, cgs.media.whiteShader );
 		}
 	}
+	avgInterp = (avgInterp / aw) * -1.0f;
 
 	// draw the snapshot latency / drop graph
 	range = ah / 2;
@@ -5877,7 +5979,10 @@ static void CG_DrawLagometer( void ) {
 	for ( a = 0 ; a < aw ; a++ ) {
 		i = ( lagometer.snapshotCount - 1 - a ) & (LAG_SAMPLES - 1);
 		v = lagometer.snapshotSamples[i];
+		if (v > highestPing)
+			highestPing = v;
 		if ( v > 0 ) {
+			avgPing += v;
 			if ( lagometer.snapshotFlags[i] & SNAPFLAG_RATE_DELAYED ) {
 				if ( color != 5 ) {
 					color = 5;	// YELLOW for rate delay
@@ -5889,12 +5994,13 @@ static void CG_DrawLagometer( void ) {
 					trap->R_SetColor( g_color_table[ColorIndex(COLOR_GREEN)] );
 				}
 			}
-			v = v * vscale;
+			v *= vscale;
 			if ( v > range ) {
 				v = range;
 			}
 			trap->R_DrawStretchPic( ax + (aw - a) * cgs.widthRatioCoef, ay + ah - v, 1.0f * cgs.widthRatioCoef, v, 0, 0, 0, 0, cgs.media.whiteShader );
 		} else if ( v < 0 ) {
+			avgPing += highestPing;
 			if ( color != 4 ) {
 				color = 4;		// RED for dropped snapshots
 				trap->R_SetColor( g_color_table[ColorIndex(COLOR_RED)] );
@@ -5902,29 +6008,28 @@ static void CG_DrawLagometer( void ) {
 			trap->R_DrawStretchPic( ax + (aw - a) * cgs.widthRatioCoef, ay + ah - range, 1.0f * cgs.widthRatioCoef, range, 0, 0, 0, 0, cgs.media.whiteShader );
 		}
 	}
+	avgPing /= aw;
 
 	trap->R_SetColor( NULL );
+	ay -= 1.0f;
 
 	if ( cg_noPredict.integer || g_synchronousClients.integer ) {
 		CG_DrawBigString( ax + 1, ay - 2, "snc", 1.0 );
+		ay += BIGCHAR_HEIGHT - 1;
 	}
-	//TnG NoVe
-	else if (cg.snap && cg_lagometer.integer == 2 || cg_lagometer.integer == 3)
-	{
-		int total = 0;
-		float avgInterp;
-		int i;
+
+	if (cg_lagometer.integer == 2 || cg_lagometer.integer == 3)
+	{//TnG NoVe
+		char *s = va("%.0f", avgPing);
+		float strW;
 
 		//CG_Text_Paint(400, 400, 1.0, colorWhite, va("%i", cg.snap->ping), 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE, FONT_LARGE);
-		CG_Text_Paint(ax + 3 * cgs.widthRatioCoef, ay - 1, 0.5f, colorWhite, va("%i", cg.snap->ping), 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE, FONT_SMALL);
-
-		for (i = 0; i < LAG_SAMPLES; i++) {
-			total += lagometer.frameSamples[i];
-		}
-		avgInterp = total / (float)LAG_SAMPLES * -1;
+		CG_Text_Paint(ax + (3.0f * cgs.widthRatioCoef), ay, 0.5f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE, FONT_SMALL);
 
 		//CG_Text_Paint(400, 300, 1.0, colorBlue, va("%04.1f", avgInterp), 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE, FONT_LARGE);
-		CG_Text_Paint(ax + 28 * cgs.widthRatioCoef, ay - 1, 0.5f, colorWhite, va("%04.1f", avgInterp), 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE, FONT_SMALL);
+		s = va("%04.1f", avgInterp);
+		strW = CG_Text_Width(s, 0.5f, FONT_SMALL);
+		CG_Text_Paint(ax + (aw*cgs.widthRatioCoef) - strW, ay, 0.5f, colorWhite, s, 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE, FONT_SMALL);
 	}
 
 	CG_DrawDisconnect();
@@ -5951,7 +6056,7 @@ static void CG_DrawSpeedGraph( void ) {
 			CG_DrawPic(x, y, 48 * cgs.widthRatioCoef, 48, cgs.media.lagometerShader);
 
 	if (cg_lagometer.integer == 2 || (cg_lagometer.integer == 3 && cg.currentSpeed != 0))
-		CG_Text_Paint(x + 2 * cgs.widthRatioCoef, y, 0.75f, colorWhite, va("%.0f", cg.currentSpeed), 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE, FONT_SMALL2);
+		CG_Text_Paint(x + 2 * cgs.widthRatioCoef, y, 0.5f, colorWhite, va("%.0f", cg.currentSpeed), 0, 0, ITEM_TEXTSTYLE_SHADOWEDMORE, FONT_SMALL);
 
 	if (cg_lagometer.integer != 1 && cg_lagometer.integer != 2)
 		y -= 96;
@@ -6061,8 +6166,9 @@ void CG_CenterPrint( const char *str, int y, int charWidth ) {
 			i = 0;
 			cg.centerPrintLines++;
 		}
-		else if (*s == '\n')
+		else if (*s == '\n') {
 			cg.centerPrintLines++;
+		}
 		s++;
 	}
 }
@@ -6105,8 +6211,9 @@ void CG_CenterPrintMultiKill(const char *str, int y, int charWidth) {
 			i = 0;
 			cg.centerPrintLines++;
 		}
-		else if (*s == '\n')
+		else if (*s == '\n') {
 			cg.centerPrintLines++;
+		}
 		s++;
 	}
 
@@ -6126,13 +6233,14 @@ qboolean BG_IsWhiteSpace( char c )
 
 	return qfalse;
 }
+
 static void CG_DrawCenterString( void ) {
 	char	*start;
 	int		l;
 	int		x, y, w;
-	int h;
+	int		h;
 	float	*color;
-	float scale = cg_centerSize.value;//1.0; //0.5
+	float	scale = cg_centerSize.value;//1.0; //0.5
 
 	if (scale < 0)
 		scale = 0;
@@ -6513,7 +6621,7 @@ void CG_LerpCrosshairPos( float *x, float *y )
 {
 	if ( cg_crosshairPrevPosX )
 	{//blend from old pos
-		float maxMove = 30.0f * ((float)cg.frametime/500.0f) * 640.0f/480.0f;
+		float maxMove = 30.0f * ((float)cg.frametime/500.0f) * (float)SCREEN_WIDTH/(float)SCREEN_HEIGHT;
 		float xDiff = (*x - cg_crosshairPrevPosX);
 		if ( fabs(xDiff) > CRAZY_CROSSHAIR_MAX_ERROR_X )
 		{
@@ -6558,6 +6666,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint, int chEntValid ) {
 	float		x, y;
 	qboolean	corona = qfalse;
 	vec4_t		ecolor = {0,0,0,0};
+	vec4_t		hcolor;
 	centity_t	*crossEnt = NULL;
 	float		chX, chY;
 
@@ -6576,7 +6685,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint, int chEntValid ) {
 		return;
 	}
 
-	if (cg.snap->ps.fallingToDeath)
+	if (cg.predictedPlayerState.fallingToDeath)
 	{
 		return;
 	}
@@ -6588,14 +6697,51 @@ static void CG_DrawCrosshair( vec3_t worldPoint, int chEntValid ) {
 
 	if ( cg_crosshairHealth.integer )
 	{
-		vec4_t		hcolor;
-
 		CG_ColorForHealth( hcolor );
 		trap->R_SetColor( hcolor );
 	}
-	else if (cg.crosshairColor[0] || cg.crosshairColor[1] || cg.crosshairColor[2])
+	else if (cg_crosshairSaberStyleColor.integer && cg.predictedPlayerState.weapon == WP_SABER) {
+		switch (cg.predictedPlayerState.fd.saberDrawAnimLevel)
+		{
+			case 1://blue
+			case 5://Tavion
+				hcolor[0] = 0.0f;
+				hcolor[1] = 0.0f;
+				hcolor[2] = 1.0f;
+				break;
+			case 2://yellow
+			case 6://SS_DUAL
+			case 7://SS_STAFF
+				hcolor[0] = 1.0f;
+				hcolor[1] = 1.0f;
+				hcolor[2] = 0.0f;
+				break;
+			case 3://red
+			case 4://Desann
+				hcolor[0] = 1.0f;
+				hcolor[1] = 0.0f;
+				hcolor[2] = 0.0f;
+				break;
+			default:
+				hcolor[0] = 1.0f;
+				hcolor[1] = 1.0f;
+				hcolor[2] = 1.0f;
+				break;
+		}
+
+		hcolor[3] = cg.crosshairColor[3];
+
+		trap->R_SetColor(hcolor);
+	}
+	else if (cg_drawCrosshair.integer == 10) {
+		hcolor[0] = 1.0f;
+		hcolor[1] = 1.0f;
+		hcolor[2] = 1.0f;
+		hcolor[3] = 3.0f;
+		trap->R_SetColor(hcolor);
+	}
+	else if ((cg.crosshairColor[0] || cg.crosshairColor[1] || cg.crosshairColor[2]) && !cg_crosshairIdentifyTarget.integer)
 	{
-		vec4_t		hcolor;
 		hcolor[0] = cg.crosshairColor[0];
 		hcolor[1] = cg.crosshairColor[1];
 		hcolor[2] = cg.crosshairColor[2];
@@ -6863,7 +7009,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint, int chEntValid ) {
 
 
 	//JAPRO - Clientside - Option to disable crosshair scaling.
-	if (!cg_crosshairSizeScale.integer /*|| cg_drawCrosshair.integer == 10*/) {
+	if (!cg_crosshairSizeScale.integer) {
 		w = (float)(cg_crosshairSize.value / (cgs.glconfig.vidWidth * (1.0 / SCREEN_WIDTH)));
 		h = (float)(cg_crosshairSize.value / (cgs.glconfig.vidHeight * (1.0 / SCREEN_HEIGHT)));
 	}
@@ -6899,7 +7045,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint, int chEntValid ) {
 		hShader = cgs.media.crosshairShader[cg_drawCrosshair.integer % NUM_CROSSHAIRS];
 	}
 
-	if (cg_crosshairSizeScale.integer /*&& cg_drawCrosshair.integer != 10*/)
+	if (cg_crosshairSizeScale.integer)
 		w *= cgs.widthRatioCoef;
 
 	chX = x + cg.refdef.x + 0.5 * (SCREEN_WIDTH - w);
@@ -6976,8 +7122,8 @@ qboolean CG_WorldCoordToScreenCoord(vec3_t worldCoord, float *x, float *y)
 
     VectorSubtract(worldCoord, cg.refdef.vieworg, trans);
 
-    xc = 640 / 2.0;
-    yc = 480 / 2.0;
+    xc = SCREEN_WIDTH / 2.0;
+    yc = SCREEN_HEIGHT / 2.0;
 
 	// z = how far is the object in our forward direction
     z = DotProduct(trans, cg.refdef.viewaxis[0]);
@@ -7061,8 +7207,7 @@ void CG_SaberClashFlare( void )
 	trap->R_SetColor( color );
 
 	CG_DrawPic( x - ( v * 300 ) * cgs.widthRatioCoef, y - ( v * 300 ),
-				v * 600 * cgs.widthRatioCoef, v * 600,
-				trap->R_RegisterShader( "gfx/effects/saberFlare" ));
+				v * 600 * cgs.widthRatioCoef, v * 600, cgs.media.saberClashFlare );
 }
 
 void CG_DottedLine( float x1, float y1, float x2, float y2, float dotSize, int numDots, vec4_t color, float alpha )
@@ -7254,10 +7399,10 @@ void CG_BracketEntity( centity_t *cent, float radius )
 	{//draw the lead indicator
 		if ( isEnemy )
 		{//an enemy object
-			if ( cent->currentState.clientNum < MAX_CLIENTS )
-			{//is a dood
+			if ( cent->currentState.NPC_class == CLASS_VEHICLE )
+			{//enemy vehicle
 				if ( !VectorCompare( cent->currentState.pos.trDelta, vec3_origin ) )
-				{//they are moving
+				{//enemy vehicle is moving
 					if ( cg.predictedPlayerState.m_iVehicleNum )
 					{//I'm in a vehicle
 						centity_t		*veh = &cg_entities[cg.predictedPlayerState.m_iVehicleNum];
@@ -7852,7 +7997,7 @@ qboolean staticCrosshairOverride() {
 		cg.snap->ps.weapon == WP_STUN_BATON)
 		return qtrue; //no point with melee weapons
 
-	if ((cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE]))
+	if (cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE])
 		return qtrue;
 
 	if (cg_strafeHelper.integer & SHELPER_SUPEROLDSTYLE ||
@@ -7875,7 +8020,7 @@ static void CG_ScanForCrosshairEntity( void ) {
 
 	ignore = cg.predictedPlayerState.clientNum;
 
-	if ( cg_dynamicCrosshair.integer && !staticCrosshairOverride() || (cg_smoothCamera.integer && cg.renderingThirdPerson) )
+	if ( cg_dynamicCrosshair.integer && !staticCrosshairOverride() )
 	{
 		vec3_t d_f, d_rt, d_up;
 		/*
@@ -8066,7 +8211,7 @@ static void CG_ScanForCrosshairEntity( void ) {
 		}
 	}
 
-	if ( trace.entityNum >= MAX_CLIENTS ) {
+	if ( cg_drawCrosshairNames.value > 0 && trace.entityNum >= MAX_CLIENTS ) {
 		return;
 	}
 
@@ -8092,6 +8237,7 @@ static void CG_DrawCrosshairNames( void ) {
 	char		*name;
 	int			baseColor;
 	qboolean	isVeh = qfalse;
+	int			fadeTime;
 
 	if ( !cg_drawCrosshair.integer ) {
 		return;
@@ -8100,9 +8246,6 @@ static void CG_DrawCrosshairNames( void ) {
 	// scan the known entities to see if the crosshair is sighted on one
 	CG_ScanForCrosshairEntity();
 
-	if ( !cg_drawCrosshairNames.integer ) {
-		return;
-	}
 	//rww - still do the trace, our dynamic crosshair depends on it
 
 	if (cg.crosshairClientNum < ENTITYNUM_WORLD)
@@ -8130,8 +8273,15 @@ static void CG_DrawCrosshairNames( void ) {
 		return;
 	}
 
+	if (cg_drawCrosshairNames.value < 0)
+		fadeTime = 1000;
+	else
+		fadeTime = (cg_drawCrosshairNames.value * 1000);
+	if (fadeTime == 0)
+		return;
+
 	// draw the name of the player being looked at
-	color = CG_FadeColor( cg.crosshairClientTime, 1000 );
+	color = CG_FadeColor(cg.crosshairClientTime, fadeTime);
 	if ( !color ) {
 		trap->R_SetColor( NULL );
 		return;
@@ -8332,7 +8482,7 @@ static void CG_DrawVote(void) {
 	if (sParm && sParm[0])
 		s = va( "^7%s(%i):<%s %s^7> %s:%i %s:%i", sVote, sec, sCmd, sParm, sYes, cgs.voteYes, sNo, cgs.voteNo );
 	else
-		s = va( "^7%s(%i):<%s%7> %s:%i %s:%i",    sVote, sec, sCmd,        sYes, cgs.voteYes, sNo, cgs.voteNo );
+		s = va( "^7%s(%i):<%s^7> %s:%i %s:%i",    sVote, sec, sCmd,        sYes, cgs.voteYes, sNo, cgs.voteNo );
 	CG_DrawSmallString( 4, 62, s, 1.0f );
 	s = CG_GetStringEdString( "MP_INGAME", "OR_PRESS_ESC_THEN_CLICK_VOTE" );	//	s = "or press ESC then click Vote";
 	CG_DrawSmallString( 4, 62 + SMALLCHAR_HEIGHT + 2, s, 1.0f );
@@ -8479,8 +8629,8 @@ static qboolean CG_DrawFollow( void )
 	CG_Text_Paint (4, 27, 0.85f, colorWhite, s, 0, 0, 0, FONT_MEDIUM );//JAPRO - Clientside - Move spectated clients name to top left corner of screen
 	
 	//Loda - add their movemnt style here..?f
-
-	if (cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE]) {
+	if (cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE])
+	{
 		char styleString[16] = {0};
 		IntegerToRaceName(cg.predictedPlayerState.stats[STAT_MOVEMENTSTYLE], styleString, sizeof(styleString));
 		CG_Text_Paint (4, 44, 0.7f, colorWhite, styleString, 0, 0, 0, FONT_MEDIUM );//JAPRO - Clientside - Move spectated clients name to top left corner of screen
@@ -9128,7 +9278,6 @@ static void CG_DrawSiegeHUDItem(void)
 /*====================================
 chatbox functionality -rww
 ====================================*/
-#define	CHATBOX_CUTOFF_LEN	(cg_chatBoxCutOffLength.integer)
 #define	CHATBOX_FONT_HEIGHT	20
 
 //utility func, insert a string into a string at the specified
@@ -9194,18 +9343,53 @@ char *Q_strtokm(char *str, const char *delim)
 void CG_ChatBox_AddString(char *chatStr)
 {
 	chatBoxItem_t *chat = &cg.chatItems[cg.chatItemActive];
+	char tempChatStr[MAX_SAY_TEXT+MAX_NETNAME] = { 0 }, *r = chatStr, *w = tempChatStr;
 	float chatLen;
 
-	if (cg_chatBox.integer<=0)
+	if (cg_logChat.integer & JAPRO_CHATLOG_ENABLE) {
+		CG_LogPrintf(cg.log.file, "%s\n", chatStr);
+	}
+
+	if (cg_chatBox.integer < 0)
 	{ //don't bother then.
 		return;
 	}
 
-	memset(chat, 0, sizeof(chatBoxItem_t));
+	// from duo
+	// NOTE: this creates real percent symbols in the string, be careful using va(), etc below here!
+	//Q_strncpyz(tempChatStr, chatStr, sizeof(tempChatStr));
+	*r = *chatStr;
+	while (*r) {
+		if (*r == -80 && *(r + 1) == '/' && *(r + 2) == '.') {
+			*w = '%';
+			r += 3;
+		}
+		else if (*r == '\'' && *(r + 1) == '\'') {
+			*w = '"';
+			r += 2;
+		}
+		else {
+			*w = *r;
+			r++;
+		}
+		w++;
+	}
+
+	chatStr = tempChatStr;
+
+	if (cg_chatBox.integer) {
+		trap->Print("*%s\n", chatStr);
+	}
+	else {
+		trap->Print("%s\n", chatStr);
+		return;
+	}
+
+	Com_Memset(chat, 0, sizeof(chatBoxItem_t));
 
 	if (strlen(chatStr) > sizeof(chat->string))
 	{ //too long, terminate at proper len.
-		chatStr[sizeof(chat->string)-1] = 0;
+		chatStr[sizeof(chat->string) - 1] = 0;
 	}
 
 	if (cg_cleanChatbox.integer)
@@ -9228,6 +9412,8 @@ void CG_ChatBox_AddString(char *chatStr)
 		if (strstr(chatStr, "^7]: ^6")) {
 			personal = qtrue;
 			search = "^7]: ^6";
+			if (cg_chatBox.integer == 2)
+				trap->S_StartLocalSound(cgs.media.talkSound, CHAN_LOCAL_SOUND);
 		}
 
 		if (regular || teamchat || personal) {
@@ -9305,7 +9491,7 @@ void CG_ChatBox_AddString(char *chatStr)
 	}
 
 	cg.chatItemActive++;
-	if (cg.chatItemActive >= MAX_CHATBOX_ITEMS)
+	if (cg.chatItemActive >= cg_chatBoxLines.integer)
 	{
 		cg.chatItemActive = 0;
 	}
@@ -9334,20 +9520,21 @@ static QINLINE void CG_ChatBox_DrawStrings(void)
 	int numToDraw = 0;
 	int linesToDraw = 0;
 	int i = 0;
-	float x = cg_chatBoxX.integer * cgs.widthRatioCoef;
-	float y = cg.scoreBoardShowing ? 475 : cg_chatBoxHeight.integer;
+	float x = (cg.scoreBoardShowing ? 8 : cg_chatBoxX.value) * cgs.widthRatioCoef;
+	float y = cg.scoreBoardShowing ? 475 : cg_chatBoxHeight.value;
 	float fontScale = 0.65 * cg_chatBoxFontSize.value;//JAPRO - Clientside - Chatbox Font Size Scaler
+	qboolean drawAnyway = (qboolean)(cg_chatBoxShowHistory.integer && (trap->Key_GetCatcher() & KEYCATCH_CONSOLE));
 
 	if (!cg_chatBox.integer)
 	{
 		return;
 	}
 
-	memset(drawThese, 0, sizeof(drawThese));
+	Com_Memset(drawThese, 0, sizeof(drawThese));
 
-	while (i < MAX_CHATBOX_ITEMS)
+	while (i < cg_chatBoxLines.integer)
 	{
-		if (cg.chatItems[i].time >= cg.time)
+		if (cg.chatItems[i].time >= cg.time || drawAnyway)
 		{
 			int check = numToDraw;
 			int insertionPoint = numToDraw;
@@ -9361,7 +9548,7 @@ static QINLINE void CG_ChatBox_DrawStrings(void)
 				}
 				check--;
 			}
-			CG_ChatBox_ArrayInsert(drawThese, insertionPoint, MAX_CHATBOX_ITEMS, &cg.chatItems[i]);
+			CG_ChatBox_ArrayInsert(drawThese, insertionPoint, cg_chatBoxLines.integer, &cg.chatItems[i]);
 			numToDraw++;
 			linesToDraw += cg.chatItems[i].lines;
 		}
@@ -9816,6 +10003,8 @@ static void CG_Draw2DScreenTints( void )
 static void CG_AutoDemoRaceRecord(void)
 {
 	if (!cg_autoRecordRaceDemo.integer)
+		return;
+	if (!cg.snap)
 		return;
 	if (!cg.predictedPlayerState.stats[STAT_RACEMODE])
 		return;
@@ -10684,7 +10873,7 @@ static void CG_StrafeHelper(centity_t *cent)
 	}
 	else if (moveStyle == MV_SP) {
 		/*
-		if ((DotProduct(pm->ps->velocity, wishdir)) < 0.0f)
+		if ((DotProduct(cg.predictedPlayerState.velocity, wishdir)) < 0.0f)
 		{//Encourage deceleration away from the current velocity
 			wishspeed *= 1.35f;//pm_airDecelRate - adjust basespeed
 		}
@@ -10766,10 +10955,10 @@ static void CG_DrawAccelMeter(void)
 			x -= 52;
 	}
 
-	CG_DrawRect((x - 0.75)*cgs.widthRatioCoef,
-		cg_speedometerY.value - 10.75,
-		37.75 * cgs.widthRatioCoef,
-		13.75,
+	CG_DrawRect((x - 0.75f)*cgs.widthRatioCoef,
+		cg_speedometerY.value - 11.0f,
+		38.0f * cgs.widthRatioCoef,
+		13.75f,
 		0.5f,
 		colorTable[CT_BLACK]);
 
@@ -10936,7 +11125,7 @@ static void CG_PlayerLabels(void)
 		centity_t	*cent = &cg_entities[i];
 		vec3_t		diff;
 
-		if (!cent)
+		if (!cent || !cent->currentValid)
 			continue;
 		if (i == cg.clientNum)
 			continue;
@@ -10945,6 +11134,8 @@ static void CG_PlayerLabels(void)
 		if (cent->currentState.eFlags & EF_DEAD)
 			continue;
 		if (cent->currentState.eType != ET_PLAYER)	
+			continue;
+		if (!cgs.clientinfo[i].infoValid)
 			continue;
 		if (cgs.clientinfo[i].team == TEAM_SPECTATOR)	
 			continue;
@@ -10956,14 +11147,11 @@ static void CG_PlayerLabels(void)
 			continue;
 
 		VectorSubtract(cent->lerpOrigin, cg.predictedPlayerState.origin, diff);
-		if (VectorLength(diff) > 3000)
+		if (VectorLength(diff) >= 3000) //Make sure distance is less than... 3000 ?
 			continue;
 
-		//Make sure distance is less than... 2048 ?
-
-		CG_Trace( &trace, cg.predictedPlayerState.origin, vec3_origin, vec3_origin, cent->lerpOrigin, cg.clientNum, CONTENTS_SOLID|CONTENTS_BODY );
-
-		if (trace.entityNum >= MAX_CLIENTS)
+		CG_Trace( &trace, cg.predictedPlayerState.origin, NULL, NULL, cent->lerpOrigin, cg.clientNum, CONTENTS_SOLID|CONTENTS_BODY );
+		if (trace.entityNum == ENTITYNUM_WORLD)
 			continue;
 
 		VectorCopy(cent->lerpOrigin, pos);
@@ -11165,7 +11353,7 @@ static void CG_RaceTimer(void)
 	}
 }
 
-#define ACCEL_SAMPLES 16
+#define ACCEL_SAMPLES 32
 static void CG_Speedometer(void)
 {
 		const char *accelStr, *accelStr2, *accelStr3;
@@ -11293,6 +11481,8 @@ static void CG_Speedometer(void)
 static void CG_DrawShowPos(void)
 {
 	static char showPosString[128];
+	playerState_t *ps = &cg.predictedPlayerState;
+	float vel;
 
 	if (!cg_showpos.integer)
 		return;
@@ -11300,37 +11490,43 @@ static void CG_DrawShowPos(void)
 	if (!cg.snap)
 		return;
 
-	Com_sprintf(showPosString, sizeof(showPosString), "pos:   %.2f   %.2f   %.2f\nang:   %.2f   %.2f\nvel:     %.2f", (float)cg.predictedPlayerState.origin[0], (float)cg.predictedPlayerState.origin[1], (float)cg.predictedPlayerState.origin[2], (float)cg.predictedPlayerState.viewangles[PITCH], (float)cg.predictedPlayerState.viewangles[YAW], cg.currentSpeed);
+	if (!ps)
+		return;
+
+	vel = sqrtf(cg.currentSpeed * cg.currentSpeed + ps->velocity[2] * ps->velocity[2]);
+
+	Com_sprintf(showPosString, sizeof(showPosString), "pos:   %.2f   %.2f   %.2f\nang:   %.2f   %.2f\nvel:     %.2f",
+		(float)ps->origin[0], (float)ps->origin[1], (float)ps->origin[2], (float)ps->viewangles[PITCH], (float)ps->viewangles[YAW], vel);
 
 	CG_Text_Paint(SCREEN_WIDTH - (SCREEN_WIDTH - 340) * cgs.widthRatioCoef, 0, 0.6f, colorWhite,
-		showPosString, 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL2);
+		showPosString, 0, 0, ITEM_TEXTSTYLE_OUTLINESHADOWED, FONT_SMALL2);
 }
 
 static void CG_MovementKeys(centity_t *cent)
 {
 		usercmd_t cmd = { 0 };
+		playerState_t *ps = NULL;
 		int moveDir;
 		float w, h, x, y, xOffset, yOffset;
 
 		if (!cg.snap)
 			return;
 
-		moveDir = cg.snap->ps.movementDir;
+		ps = &cg.predictedPlayerState; //&cg.snap->ps;
+		moveDir = ps->movementDir;
 
-		//if (!pm)
-			//return;//idk
-
-		if (cg.clientNum == cg.predictedPlayerState.clientNum && !cg.demoPlayback)
+		if (cg.clientNum == cg.predictedPlayerState.clientNum && !cg.demoPlayback) {
 			trap->GetUserCmd( trap->GetCurrentCmdNumber(), &cmd );
+		}
 		else
 		{
-			float xyspeed = sqrtf( cg.snap->ps.velocity[0]*cg.snap->ps.velocity[0] + cg.snap->ps.velocity[1]*cg.snap->ps.velocity[1] );
-			float zspeed = cg.snap->ps.velocity[2];
+			float xyspeed = sqrtf( ps->velocity[0] * ps->velocity[0] + ps->velocity[1] * ps->velocity[1] );
+			float zspeed = ps->velocity[2];
 			static float lastZSpeed = 0.0f;
 
 			if ((PM_GroundDistance2() > 1 && zspeed > 8 && zspeed > lastZSpeed && !cg.snap->ps.fd.forceGripCripple) || (cg.snap->ps.pm_flags & PMF_JUMP_HELD))
 				cmd.upmove = 1;
-			else if ( (cg.snap->ps.pm_flags & PMF_DUCKED) || CG_InRollAnim(cent) )
+			else if ( (ps->pm_flags & PMF_DUCKED) || CG_InRollAnim(cent) )
 				cmd.upmove = -1;
 
 			if ( xyspeed < 9 )
@@ -11379,27 +11575,25 @@ static void CG_MovementKeys(centity_t *cent)
 		w = (16*cg_movementKeysSize.value)*cgs.widthRatioCoef;
 		h = 16*cg_movementKeysSize.value;
 
-		xOffset = 0;
-		yOffset = 0;
-
-		if (Q_isanumber(cg_hudFiles.string)) {
-			if (cg_hudFiles.integer == 1)
-				xOffset += 51; //516
-			else if (cg_hudFiles.integer == 2) {
-				xOffset += 26; //492
-				yOffset -= 3;
+		xOffset = yOffset = 0;
+		if (cgs.newHud) {
+			switch (cg_hudFiles.integer)
+			{
+				default:										break;
+				case 0: 										break;
+				case 1: xOffset += 51; /*516*/					break;
+				case 2: xOffset += 26; /*492*/ yOffset -= 3;	break;
+				case 3: xOffset -= 18; /*447*/					break; 
 			}
-			else if (cg_hudFiles.integer == 3)
-				xOffset -= 18; //447
 
-			if (cg_drawScore.integer == 0 || cgs.gametype == GT_POWERDUEL || (cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE]))
-				yOffset += 12; // 445
-			else if (cg_drawScore.integer > 1 && cgs.gametype >= GT_TEAM && cgs.gametype != GT_SIEGE) {
-				yOffset -= 14; //420
-				if (cg_hudFiles.integer != 1)
-					xOffset -= 12; //452
-				else
-					xOffset -= 23; //442
+			if (cgs.newHud) {
+				if (!cg_drawScore.integer || cgs.gametype == GT_POWERDUEL || (cgs.serverMod == SVMOD_JAPRO && ps->stats[STAT_RACEMODE])) {
+					yOffset += 12; //445
+				}
+				else if (cg_drawScore.integer > 1 && cgs.gametype >= GT_TEAM && cgs.gametype != GT_SIEGE) {
+					xOffset -= cg_hudFiles.integer != 1 ? 12 : 23; //452 : //442
+					yOffset -= 14; //420
+				}
 			}
 		}
 

@@ -252,6 +252,9 @@ static cvar_t		*fs_copyfiles;
 static cvar_t		*fs_gamedirvar;
 static cvar_t		*fs_dirbeforepak; //rww - when building search path, keep directories at top and insert pk3's under them
 static cvar_t		*fs_loadpakdlls;
+#ifndef DEDICATED
+static cvar_t		*fs_globalcfg;
+#endif
 static searchpath_t	*fs_searchpaths;
 static int			fs_readCount;			// total bytes read
 static int			fs_loadCount;			// total files read
@@ -859,6 +862,46 @@ fileHandle_t FS_SV_FOpenFileWrite( const char *filename ) {
 	if (!fsh[f].handleFiles.file.o) {
 		f = 0;
 	}
+	return f;
+}
+
+/*
+===========
+FS_SV_FOpenFileAppend
+
+===========
+*/
+fileHandle_t FS_SV_FOpenFileAppend( const char *filename ) {
+	char			*ospath;
+	fileHandle_t	f;
+
+	FS_AssertInitialised();
+
+	f = FS_HandleForFile();
+	fsh[f].zipFile = qfalse;
+
+	Q_strncpyz( fsh[f].name, filename, sizeof( fsh[f].name ) );
+
+	ospath = FS_BuildOSPath( fs_homepath->string, filename, "" );
+	ospath[strlen(ospath)-1] = '\0';
+
+	if ( fs_debug->integer ) {
+		Com_Printf( "FS_SV_FOpenFileAppend: %s\n", ospath );
+	}
+
+	FS_CheckFilenameIsMutable( ospath, __func__ );
+
+	if( FS_CreatePath( ospath ) ) {
+		return 0;
+	}
+
+	fsh[f].handleFiles.file.o = fopen( ospath, "ab" );
+	fsh[f].handleSync = qfalse;
+
+	if (!fsh[f].handleFiles.file.o) {
+		f = 0;
+	}
+
 	return f;
 }
 
@@ -3508,6 +3551,9 @@ void FS_Shutdown( qboolean closemfp ) {
 		fclose(missingFiles);
 	}
 #endif
+
+	if (closemfp) //not restarting
+		Cmd_RemoveCommand("fs_restart");
 }
 
 //rww - add search paths in for received svc_setgame
@@ -3601,7 +3647,7 @@ void FS_Startup( const char *gameName ) {
 	fs_copyfiles = Cvar_Get( "fs_copyfiles", "0", CVAR_INIT );
 	fs_cdpath = Cvar_Get ("fs_cdpath", "", CVAR_INIT|CVAR_PROTECTED, "(Read Only) Location for development files" );
 	fs_basepath = Cvar_Get ("fs_basepath", Sys_DefaultInstallPath(), CVAR_INIT|CVAR_PROTECTED, "(Read Only) Location for game files" );
-	fs_basegame = Cvar_Get ("fs_basegame", "", CVAR_INIT );
+	fs_basegame = Cvar_Get ("fs_basegame", DINURDOJKGAME, CVAR_INIT );
 	fs_portable = Cvar_Get ("fs_portable", "1", CVAR_INIT|CVAR_PROTECTED, "Disable fs_homepath and use only one folder for all game files" );
 	homePath = Sys_DefaultHomePath();
 	if (!homePath || !homePath[0]) {
@@ -3609,7 +3655,15 @@ void FS_Startup( const char *gameName ) {
 	}
 	fs_homepath = Cvar_Get ("fs_homepath", homePath, CVAR_INIT|CVAR_PROTECTED, "(Read/Write) Location for user generated files" );
 
-	fs_gamedirvar = Cvar_Get ("fs_game", "", CVAR_INIT|CVAR_SYSTEMINFO, "Mod directory" );
+#ifndef DEDICATED
+	//cancer?
+	fs_globalcfg = Cvar_Get("fs_globalcfg", "0", CVAR_ARCHIVE/* | CVAR_LATCH*/ | CVAR_NORESTART | CVAR_PROTECTED, "Only read/write files from base and DinurdoJK folders (requires filesystem restart)");
+
+	if (fs_globalcfg->integer)
+		fs_gamedirvar = fs_basegame;
+	else
+#endif
+		fs_gamedirvar = Cvar_Get ("fs_game", "", CVAR_INIT|CVAR_SYSTEMINFO, "Mod directory" );
 
 	fs_dirbeforepak = Cvar_Get("fs_dirbeforepak", "0", CVAR_INIT|CVAR_PROTECTED, "Prioritize directories before paks if not pure" );
 
@@ -3646,6 +3700,11 @@ void FS_Startup( const char *gameName ) {
 		if (fs_basepath->string[0]) {
 			FS_AddGameDirectory(fs_basepath->string, fs_basegame->string);
 		}
+#ifdef MACOS_X
+		if (fs_apppath->string[0]) {
+			FS_AddGameDirectory(fs_apppath->string, fs_basegame->string);
+		}
+#endif
 		if (fs_homepath->string[0] && !Sys_PathCmp(fs_homepath->string, fs_basepath->string)) {
 			FS_AddGameDirectory(fs_homepath->string, fs_basegame->string);
 		}
@@ -4061,6 +4120,7 @@ Called only at inital startup, not when the filesystem
 is resetting due to a game change
 ================
 */
+static void FS_Restart_f(void);
 void FS_InitFilesystem( void ) {
 	// allow command line parms to override our defaults
 	// we have to specially handle this, because normal command
@@ -4078,6 +4138,8 @@ void FS_InitFilesystem( void ) {
 
 	if(!FS_FilenameCompare(Cvar_VariableString("fs_game"), BASEGAME))
 		Cvar_Set("fs_game", "");
+
+	Cmd_AddCommand("fs_restart", FS_Restart_f, "Restarts the filesystem loading any new paks to search paths");
 
 	// try to start up normally
 	FS_Startup( BASEGAME );
@@ -4182,6 +4244,16 @@ qboolean FS_ConditionalRestart( int checksumFeed ) {
 		FS_ReorderPurePaks();
 #endif
 	return qfalse;
+}
+
+/*
+=================
+FS_Restart_f
+Console command to restart filesystem.
+=================
+*/
+static void FS_Restart_f(void) {
+	FS_Restart(fs_checksumFeed);
 }
 
 /*

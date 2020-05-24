@@ -123,7 +123,7 @@ CG_ScoresDown_f
 static void CG_ScoresDown_f( void ) {
 
 	CG_BuildSpectatorString();
-	if ( cg.scoresRequestTime + 2000 < cg.time ) {
+	if ( !cg.demoPlayback && cg.scoresRequestTime + 2000 < cg.time ) { //don't clear the scoreboard when watching a demo
 		// the scores are more than two seconds out of data,
 		// so request new ones
 		cg.scoresRequestTime = cg.time;
@@ -306,12 +306,15 @@ static void CG_SiegeCompleteCvarUpdate_f(void)
 void CG_LoadHud_f( void ) {
 	const char *hudSet;
 
-	if (cg_hudFiles.integer > 2) {
+	if ( cg.loading )
+		return;
+
+	if ( cgs.newHud && cg_hudFiles.integer == 3 ) {
 		hudSet = "ui/elegance_hud.txt";
 	}
 	else {
 		hudSet = cg_hudFiles.string;
-		if ( hudSet[0] == '\0' )
+		if ( !VALIDSTRING(hudSet) )
 		{
 			hudSet = "ui/jahud.txt";
 		}
@@ -358,6 +361,11 @@ static int CG_ClientNumberFromString(const char *s)
 	char		s2[MAX_STRING_CHARS];
 	char		n2[MAX_STRING_CHARS];
 	idnum = atoi(s);
+
+	if (s[0] == '-') { //- returns id of target in our crosshair
+		idnum = CG_CrosshairPlayer();
+		return idnum;
+	}
 
 	// numeric values are just slot numbers
 	if (s[0] >= '0' && s[0] <= '9' && strlen(s) == 1) //changed this to only recognize numbers 0-31 as client numbers, otherwise interpret as a name, in which case sanitize2 it and accept partial matches (return error if multiple matches)
@@ -435,7 +443,7 @@ static void CG_IgnoreVGS_f(void)
 		Com_Printf("VGS Ignored client(s):\n");
 		for (i = 0, cl = cgs.clientinfo; i < cgs.maxclients; ++i, ++cl) {
 			if (cl->infoValid && (cgs.ignoredVGS & (1 << i))) {
-				trap->Print("^5%2d^3: ^7%s\n", i, cl->name);
+				Com_Printf("^5%2d^3: ^7%s\n", i, cl->name);
 			}
 		}
 	}
@@ -496,12 +504,12 @@ static void CG_ShowSpecCamera_f(void)
 //JAPRO - Clientside - Serversettings? - Start
 static void CG_ServerConfig_f(void) // this should be serverside for JAPRO.  Clientside for JAPLUS etc?
 {
-	if (cgs.isJAPro) {
+	if (cgs.serverMod == SVMOD_JAPRO) {
 		trap->SendClientCommand( "serverconfig" );
 	}
 	else {
 		//(sv_fps.integer > 0) ? CG_Printf("^5sv_fps^3: ^7%i\n", sv_fps.integer) : CG_Printf("^5sv_fps^3: ^7?\n"); 
-		if (cgs.isJAPlus) {
+		if (cgs.serverMod == SVMOD_JAPLUS) {
 			trap->Print("^5Flipkick^3:^7 %s\n", (cgs.cinfo & JAPLUS_CINFO_FLIPKICK) ? "^2Yes" : "^1No");
 			trap->Print("^5JK2 roll^3:^7 %s\n", (cgs.cinfo & JAPLUS_CINFO_FIXROLL3) ? "^2Yes" : "^1No");
 			trap->Print("^5Improve yellow DFA^3:^7 %s\n", (cgs.cinfo & JAPLUS_CINFO_YELLOWDFA) ? "^2Yes" : "^1No");
@@ -529,9 +537,9 @@ static void CG_Login_f(void)
 {
 	char username[MAX_QPATH], password[MAX_QPATH];
 
-	if (cgs.isJAPlus || cgs.isBase) //Block this on mods that dont have /login to help avoid leaking
+	if (cgs.serverMod == SVMOD_JAPLUS || cgs.serverMod == SVMOD_BASEJKA) //Block this on mods that dont have /login to help avoid leaking
 		return;
-	if (cg.predictedPlayerState.pm_type == PM_INTERMISSION && !(cgs.isJAPro || cgs.isBaseEnhanced || cgs.isOJKAlt))
+	if (cg.predictedPlayerState.pm_type == PM_INTERMISSION && cgs.serverMod != SVMOD_JAPRO && cgs.serverMod != SVMOD_BASEENHANCED && cgs.serverMod != SVMOD_OJKALT)
 		return;
 
 	trap->Cmd_Argv(1, username, sizeof(username));
@@ -543,7 +551,7 @@ static void CG_ModVersion_f(void)
 {
 	trap->Print("^5Your client version of the mod was compiled on %s at %s\n", __DATE__, __TIME__);//ass
 	trap->SendConsoleCommand("ui_modversion\n");
-	if (cgs.isJAPro) {
+	if (cgs.serverMod == SVMOD_JAPRO) {
 		trap->SendClientCommand( "modversion" );
 		trap->Cvar_Set("cjp_client", "1.4JAPRO"); //Do this manually here i guess, just incase it does not do it when game is created due to ja+ or something
 	}
@@ -597,26 +605,42 @@ static void CG_FollowFastest_f(void) {
 		return;
 
 	for (i=0;i<MAX_CLIENTS;i++) {
-			if (i == cg.snap->ps.clientNum)
-				continue;
+		if (i == cg.snap->ps.clientNum)
+			continue;
 
-			cent = &cg_entities[i];
+		cent = &cg_entities[i];
 
-			if (!cent)
-				continue;
-			if (cent->currentState.eType != ET_PLAYER)
-				continue;
+		if (!cent)
+			continue;
+		if (cent->currentState.eType != ET_PLAYER)
+			continue;
 
-			currentSpeed = VectorLengthSquared(cent->currentState.pos.trDelta);
+		currentSpeed = VectorLengthSquared(cent->currentState.pos.trDelta);
 
-			if (currentSpeed > fastestSpeed) {
-				fastestSpeed = currentSpeed;
-				fastestPlayer = i;
-			}
-
+		if (currentSpeed > fastestSpeed) {
+			fastestSpeed = currentSpeed;
+			fastestPlayer = i;
+		}
 	}
+
 	if (fastestPlayer >= 0)
 		trap->SendClientCommand(va("follow %i", fastestPlayer));
+}
+
+static void CG_Follow_f(void) {
+	int clientNum = -1;
+		
+	if (trap->Cmd_Argc() < 2) {
+		Com_Printf("usage /follow <name>\n");
+		return;
+	}
+		
+		clientNum = CG_ClientNumberFromString(CG_Argv(1));
+		 
+		if (clientNum < 0)
+			return;
+		 
+		trap->SendClientCommand(va("follow %i", clientNum));
 }
 
 static void CG_RemapShader_f(void) {
@@ -633,7 +657,7 @@ static void CG_RemapShader_f(void) {
 	//validate this shit ?
 	//how to stop from using trans shaders..?
 
-	trap->R_RemapShader(oldShader, newShader, NULL);	 //the fuck is timeoffset for
+	trap->R_RemapShader(oldShader, newShader, NULL);
 
 }
 
@@ -766,28 +790,46 @@ void CG_Do_f(void) //loda fixme
 
 static void CG_Saber_f(void) // this should be serverside for JAPRO.  Clientside for JAPLUS etc?
 {
-	char saber1[MAX_QPATH], saber2[MAX_QPATH];
-	if (trap->Cmd_Argc() == 2) {
+	char saber1[MAX_QPATH] = {0}, saber2[MAX_QPATH] = {0};
+	int argc = trap->Cmd_Argc();
+	if (argc == 2) {
 		trap->Cmd_Argv( 1, saber1, sizeof( saber1 ) );
-		if (cgs.isJAPlus || cgs.isJAPro)
+		if (cgs.serverMod >= SVMOD_JAPLUS)
 			trap->SendClientCommand(va("saber %s", saber1));
-		trap->SendConsoleCommand(va("set saber1 %s\n", saber1));
+		trap->Cvar_Set("saber1", va("%s", saber1));
+		trap->Cvar_Set("saber2", "none");
+		return;
 	}
-	else if (trap->Cmd_Argc() == 3) {
+
+	if (argc == 3) {
 		trap->Cmd_Argv( 1, saber1, sizeof( saber1 ) );
 		trap->Cmd_Argv( 2, saber2, sizeof( saber2 ) );
-		if (cgs.isJAPlus || cgs.isJAPro)
+		if (cgs.serverMod >= SVMOD_JAPLUS)
 			trap->SendClientCommand(va("saber %s %s", saber1, saber2));
-		trap->SendConsoleCommand(va("set saber1 %s\n", saber1));
-		trap->SendConsoleCommand(va("set saber2 %s\n", saber2));
+		trap->Cvar_Set("saber1", va("%s", saber1));
+		trap->Cvar_Set("saber2", va("%s", saber2));
+		return;
 	}
+
+	Com_Printf("Sabers: ");
+	trap->Cvar_VariableStringBuffer("saber1", saber1, sizeof(saber1));
+	trap->Cvar_VariableStringBuffer("saber2", saber2, sizeof(saber2));
+	if (saber1[0] && strlen(saber1))
+		Com_Printf("%s", saber1);
+
+	if (!saber2[0] || !strlen(saber2) || !Q_stricmp(saber2, "none")) {
+		Com_Printf("\n");
+		return;
+	}
+
+	Com_Printf(" - %s\n", saber2);
 }
 
 static void CG_Autologin_f(void)
 {
 	char currentAddress[MAX_ADDRESSLENGTH], autoLoginString[MAX_ADDRESSLENGTH];
 
-	if (cg.predictedPlayerState.pm_type == PM_INTERMISSION && cgs.isJAPlus)
+	if (cg.predictedPlayerState.pm_type == PM_INTERMISSION && cgs.serverMod == SVMOD_JAPLUS)
 		return;
 
 	Q_strncpyz( currentAddress, cl_currentServerAddress.string, sizeof(currentAddress));
@@ -877,6 +919,22 @@ static void CG_Amcolor_f(void)
 }
 //JAPRO - Clientside - Amcolor - End
 
+static void CG_ZoomDown_f( void ) { 
+	if ( cg.zoomed ) {
+		return;
+	}
+	cg.zoomed = qtrue;
+	cg.zoomTime = cg.time;
+}
+
+static void CG_ZoomUp_f( void ) { 
+	if ( !cg.zoomed ) {
+		return;
+	}
+	cg.zoomed = qfalse;
+	cg.zoomTime = cg.time;
+}
+
 static void CG_Flipkick_f(void)
 {
 	if (cgs.restricts & RESTRICT_FLIPKICKBIND)
@@ -897,7 +955,7 @@ static void CG_Flipkick_f(void)
 
 static void CG_Lowjump_f(void)
 {
-	if ((cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE]) || (cgs.restricts & RESTRICT_DO)) {
+	if ((cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE]) || (cgs.restricts & RESTRICT_DO)) {
 		trap->SendConsoleCommand("+moveup;wait 2;-moveup\n");
 		return;
 	}
@@ -909,7 +967,7 @@ static void CG_Lowjump_f(void)
 
 static void CG_NorollDown_f(void)
 {
-	if ((cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE]) || (cgs.restricts & RESTRICT_DO)) {
+	if ((cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE]) || (cgs.restricts & RESTRICT_DO)) {
 		trap->SendConsoleCommand("+speed;wait 2;-moveup;+movedown;-speed\n");
 		return;
 	}
@@ -921,13 +979,27 @@ static void CG_NorollDown_f(void)
 
 static void CG_NorollUp_f(void)
 {
-	if ((cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE]) || cgs.restricts & RESTRICT_DO) {
+	if ((cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE]) || cgs.restricts & RESTRICT_DO) {
 		trap->SendConsoleCommand("-movedown\n");
 		return;
 	}
 
 	Q_strncpyz(cg.doVstr, "-movedown;-speed\n", sizeof(cg.doVstr)); //?
 	cg.doVstrTime = cg.time;
+}
+
+static void CG_GrappleDown_f(void) {
+	trap->SendConsoleCommand("+button12\n");
+}
+
+static void CG_GrappleUp_f(void) {
+	if (cgs.serverMod == SVMOD_JAPLUS) {
+		trap->SendConsoleCommand("-button12;+use\n");
+		Q_strncpyz(cg.doVstr, "-use\n", sizeof(cg.doVstr));
+		cg.doVstrTime = cg.time;
+	}
+	else
+		trap->SendConsoleCommand("-button12\n");
 }
 
 qboolean CG_WeaponSelectable(int i);
@@ -960,10 +1032,10 @@ void CG_LastWeapon_f(void) //loda fixme. japro
 
 	cg.weaponSelect = cg.lastWeaponSelect[1]; //Set selected to last
 
-	cg.weaponSelectTime = cg.time;
 	if (cg.weaponSelect != cg.lastWeaponSelect[1])
 		trap->S_MuteSound(cg.predictedPlayerState.clientNum, CHAN_WEAPON);
 
+	cg.weaponSelectTime = cg.time;
 }
 
 typedef struct bitInfo_S {
@@ -987,8 +1059,9 @@ static bitInfo_T strafeTweaks[] = {
 	{"Weze style"},//13
 	{"Line Crosshair"}//13
 };
-
 static const int MAX_STRAFEHELPER_TWEAKS = ARRAY_LEN( strafeTweaks );
+
+extern void CG_ClearThirdPersonDamp(void);
 void CG_StrafeHelper_f( void ) {
 	if ( trap->Cmd_Argc() == 1 ) {
 		int i = 0;
@@ -1034,6 +1107,8 @@ void CG_StrafeHelper_f( void ) {
 		Com_Printf( "%s %s^7\n", strafeTweaks[index].string, ((cg_strafeHelper.integer & (1 << index))
 			? "^2Enabled" : "^1Disabled") );
 	}
+
+	CG_ClearThirdPersonDamp();
 }
 
 static qboolean japroPluginDisables[] = {
@@ -1048,8 +1123,8 @@ static qboolean japroPluginDisables[] = {
 	qfalse,//{"No alt dim effect"},//9
 	qfalse,//{"Holstered saber"},//10
 	qfalse,//{"Ledge grab"},//11
-	qfalse,//{"New DFA Primary"},//12
-	qfalse,//{"New DFA Alt"},//13
+	qfalse,//{"Disable New DFA Primary"},//12
+	qfalse,//{"Disable New DFA Alt"},//13
 	qfalse,//{"No SP Cartwheel"},//14
 	qfalse,//{"No Auto DL Redirect"},//15
 
@@ -1082,8 +1157,8 @@ static qboolean japlusPluginDisables[] = {
 	qtrue,//{"No alt dim effect"},//9
 	qtrue,//{"Holstered saber"},//10
 	qtrue,//{"Ledge grab"},//11
-	qtrue,//{"New DFA Primary"},//12
-	qtrue,//{"New DFA Alt"},//13
+	qtrue,//{"Disable New DFA Primary"},//12
+	qtrue,//{"Disable New DFA Alt"},//13
 	qtrue,//{"No SP Cartwheel"},//14
 	qtrue,//{"No Auto DL Redirect"},//15
 
@@ -1116,8 +1191,8 @@ static bitInfo_T pluginDisables[] = { // MAX_WEAPON_TWEAKS tweaks (24)
 	{"No alt dim effect"},//9
 	{"Holstered saber"},//10
 	{"Ledge grab"},//11
-	{"New DFA Primary"},//12
-	{"New DFA Alt"},//13
+	{"Disable New DFA Primary"},//12
+	{"Disable New DFA Alt"},//13
 	{"No SP Cartwheel"},//14
 	{"No Auto DL Redirect"},//15
 
@@ -1141,7 +1216,7 @@ static const int MAX_PLUGINDISABLES = ARRAY_LEN( pluginDisables );
 
 void CG_PluginDisable_f( void ) {
 
-	if (!cgs.isJAPro && !cgs.isJAPlus) {
+	if (cgs.serverMod < SVMOD_JAPLUS) {
 		return;
 	}
 
@@ -1150,9 +1225,9 @@ void CG_PluginDisable_f( void ) {
 
 		for ( i = 0; i < MAX_PLUGINDISABLES; i++ ) {
 
-			if (cgs.isJAPlus && !japlusPluginDisables[i])
+			if (cgs.serverMod == SVMOD_JAPLUS && !japlusPluginDisables[i])
 				continue;
-			if (cgs.isJAPro && !japroPluginDisables[i])
+			if (cgs.serverMod == SVMOD_JAPRO && !japroPluginDisables[i])
 				continue;
 
 			if ( (cp_pluginDisable.integer & (1 << i)) ) {
@@ -1180,7 +1255,7 @@ void CG_PluginDisable_f( void ) {
 			//for each qtrue, increment I
 			//once I = #, thats the actual index we want
 
-			if ((cgs.isJAPlus && japlusPluginDisables[i]) || (cgs.isJAPro && japroPluginDisables[i])) {
+			if ((cgs.serverMod == SVMOD_JAPLUS && japlusPluginDisables[i]) || (cgs.serverMod == SVMOD_JAPRO && japroPluginDisables[i])) {
 				//Com_Printf("Option found %i, %s, n is %i, index is %i\n", i, pluginDisables[i], n, index);
 				if (n == index) {
 					index2 = i;
@@ -1221,7 +1296,9 @@ static qboolean japroPlayerStyles[] = {
 	qtrue,//Fade corpses immediately
 	qtrue,//Disable corpse fading SFX
 	qtrue,//Color respawn bubbles by team
-	qtrue//Hide player cosmetics
+	qtrue,//Hide player cosmetics
+	qtrue,//Disable breathing effects
+	qfalse//Old JA+ style grapple line
 };
 
 //JA+ Specific = amaltdim ?
@@ -1243,7 +1320,9 @@ static qboolean japlusPlayerStyles[] = {
 	qtrue,//Fade corpses immediately
 	qtrue,//Disable corpse fading SFX
 	qtrue,//Color respawn bubbles by team
-	qfalse//Hide player cosmetics
+	qfalse,//Hide player cosmetics
+	qtrue,//Disable breathing effects
+	qtrue//Old JA+ style grapple line
 };
 
 static bitInfo_T playerStyles[] = { // MAX_WEAPON_TWEAKS tweaks (24)
@@ -1263,7 +1342,9 @@ static bitInfo_T playerStyles[] = { // MAX_WEAPON_TWEAKS tweaks (24)
 	{ "Fade corpses immediately" },//13
 	{ "Disable corpse fading SFX" },//14
 	{ "Color respawn bubbles by team" },//15
-	{ "Hide player cosmetics" }//16
+	{ "Hide player cosmetics" },//16
+	{ "Disable breathing effects" },//17
+	{ "Old JA+ style grapple line" }//18
 };
 static const int MAX_PLAYERSTYLES = ARRAY_LEN(playerStyles);
 
@@ -1274,9 +1355,9 @@ void CG_StylePlayer_f(void)
 
 		for (i = 0; i < MAX_PLAYERSTYLES; i++) {
 
-			if (cgs.isJAPlus && !japlusPlayerStyles[i])
+			if (cgs.serverMod == SVMOD_JAPLUS && !japlusPlayerStyles[i])
 				continue;
-			if (cgs.isJAPro && !japroPlayerStyles[i])
+			if (cgs.serverMod == SVMOD_JAPRO && !japroPlayerStyles[i])
 				continue;
 
 			if ((cg_stylePlayer.integer & (1 << i))) {
@@ -1304,7 +1385,7 @@ void CG_StylePlayer_f(void)
 			//for each qtrue, increment I
 			//once I = #, thats the actual index we want
 
-			if ((cgs.isJAPlus && japlusPlayerStyles[i]) || (cgs.isJAPro && japroPlayerStyles[i])) {
+			if ((cgs.serverMod == SVMOD_JAPLUS && japlusPlayerStyles[i]) || (cgs.serverMod == SVMOD_JAPRO && japroPlayerStyles[i])) {
 				//Com_Printf("Option found %i, %s, n is %i, index is %i\n", i, pluginDisables[i], n, index);
 				if (n == index) {
 					index2 = i;
@@ -1348,9 +1429,10 @@ static bitInfo_T speedometerSettings[] = { // MAX_WEAPON_TWEAKS tweaks (24)
 	{ "Jump distance display" },//3
 	{ "Vertical speed indicator" },//4
 	{ "Yaw speed indicator" },//5
-	{ "Speed graph" },//6
-	{ "Display speed in kilometers instead of units" },//7
-	{ "Display speed in imperial miles instead of units" },//8
+	{ "Accel meter" },//6
+	{ "Speed graph" },//7
+	{ "Display speed in kilometers instead of units" },//8
+	{ "Display speed in imperial miles instead of units" },//9
 };
 static const int MAX_SPEEDOMETER_SETTINGS = ARRAY_LEN(speedometerSettings);
 
@@ -1383,9 +1465,9 @@ void CG_SpeedometerSettings_f(void)
 			return;
 		}
 
-		if (index == 7 || index == 8) { //Radio button these options
-		//Toggle index, and make sure everything else in this group (7,8) is turned off
-			int groupMask = (1 << 7) + (1 << 8);
+		if (index == 8 || index == 9) { //Radio button these options
+		//Toggle index, and make sure everything else in this group (8,9) is turned off
+			int groupMask = (1 << 8) + (1 << 9);
 			int value = cg_speedometer.integer;
 
 			groupMask &= ~(1 << index); //Remove index from groupmask
@@ -1418,7 +1500,7 @@ static const int MAX_COSMETICS = ARRAY_LEN(cosmetics);
 void IntegerToRaceName(int style, char *styleString, size_t styleStringSize);
 static void CG_Cosmetics_f(void)
 {
-	if (!cgs.isJAPro)
+	if (cgs.serverMod < SVMOD_JAPRO)
 		return;
 
 	//cosmeticUnlocks[i].bitvalue;
@@ -1515,12 +1597,11 @@ static void CG_Cosmetics_f(void)
 }
 
 static bitInfo_T chatLog[] = { // MAX_WEAPON_TWEAKS tweaks (24)
-	{ "Enable chatlogs" },//0
-	{ "Log sync" },//1
-	{ "Use Legacy timestamps" },//2
-	{ "Log Server console prints" },//3
-	{ "Log Server center prints" },//4
-	{ "Log death prints" }//5
+	{ "Enable" },//0
+	{ "Log Sync" },//1
+	{ "Legacy Timestamps" },//2
+	{ "Log Console Prints" },//3
+	{ "Log Center Prints" }//3
 };
 static const int MAX_CHATLOG_SETTINGS = ARRAY_LEN(chatLog);
 
@@ -1565,7 +1646,7 @@ static void CG_AmRun_f(void)
 {
 	const uint32_t mask = (1 << MAX_PLUGINDISABLES) - 1;
 
-	if (!cgs.isJAPro)
+	if (cgs.serverMod != SVMOD_JAPRO)
 		return;
 
 	trap->Cvar_Set( "cp_pluginDisable", va( "%i", (JAPRO_PLUGIN_JAWARUN) ^ (cp_pluginDisable.integer & mask ) ) );
@@ -1891,11 +1972,11 @@ static void CG_AddStrafeTrail_f(void)
 
 		if (clientNum == -1) {
 			if (cg_strafeTrailPlayers.integer) {
-				trap->Cvar_Set( "cg_strafeTrailPlayers",  "0" );
+				trap->Cvar_Set( "cg_strafeTrailPlayers", "0" );
 				Com_Printf("All strafetrails stopped\n");
 			}
 			else {
-				trap->Cvar_Set( "cg_strafeTrailPlayers",  "1073741823" );
+				trap->Cvar_Set( "cg_strafeTrailPlayers", "1073741823" );
 				Com_Printf("All strafetrails added\n");
 			}
 		}
@@ -1917,35 +1998,46 @@ void CG_Say_f( void ) {
 	char word[MAX_SAY_TEXT] = {0};
 	char numberStr[MAX_SAY_TEXT] = {0};
 	int i, number = 0, numWords = trap->Cmd_Argc();
-//	qboolean command = qfalse;
+	int clientNum = -1, messagetype = 0;
+
+	if (!Q_stricmp(CG_Argv(0), "say")) {
+		messagetype = 1;
+	}
+	else if (!Q_stricmp(CG_Argv(0), "say_team")) {
+		messagetype = 2;
+	}
+	else if (!Q_stricmp(CG_Argv(0), "tell")) {
+		clientNum = CG_ClientNumberFromString(CG_Argv(1));
+		messagetype = 3;
+		if (clientNum < 0) //couldn't find target or multiple matches found
+			return;
+	}
+	else {//shouldn't happen...
+		return;
+	}
 
 	for (i = 1; i < numWords; i++) {
-		trap->Cmd_Argv( i, word, sizeof(word));
-
-		//if (i==1 && !Q_stricmpn(word, "/", 1))
-			//command = qtrue;
+		if (i == 1 && clientNum > -1) //skip 1st argument in PM since that's the name of the person we're trying to PM
+			continue;
+		trap->Cmd_Argv(i, word, sizeof(word));
 
 		if (!Q_stricmp(word, "%H%")) {
-			if (pm)
-				number = pm->ps->stats[STAT_HEALTH];
+			number = cg.predictedPlayerState.stats[STAT_HEALTH];
 			Com_sprintf(numberStr, sizeof(numberStr), "%i", number);
-			Q_strncpyz( word, numberStr, sizeof(word));
+			Q_strncpyz(word, numberStr, sizeof(word));
 		}
 		else if (!Q_stricmp(word, "%S%")) {
-			if (pm)
-				number = pm->ps->stats[STAT_ARMOR];
+			number = cg.predictedPlayerState.stats[STAT_ARMOR];
 			Com_sprintf(numberStr, sizeof(numberStr), "%i", number);
-			Q_strncpyz( word, numberStr, sizeof(word));
+			Q_strncpyz(word, numberStr, sizeof(word));
 		}
 		else if (!Q_stricmp(word, "%F%")) {
-			if (pm)
-				number = pm->ps->fd.forcePower;
+			number = cg.predictedPlayerState.fd.forcePower;
 			Com_sprintf(numberStr, sizeof(numberStr), "%i", number);
-			Q_strncpyz( word, numberStr, sizeof(word));
+			Q_strncpyz(word, numberStr, sizeof(word));
 		}
 		else if (!Q_stricmp(word, "%W%")) {
-			if (pm)
-				number = pm->ps->weapon;
+			number = cg.predictedPlayerState.weapon;
 			switch (number) {
 				case 1:	Com_sprintf(numberStr, sizeof(numberStr), "Stun baton"); break;
 				case 2: Com_sprintf(numberStr, sizeof(numberStr), "Melee"); break;
@@ -1963,85 +2055,59 @@ void CG_Say_f( void ) {
 				case 15: Com_sprintf(numberStr, sizeof(numberStr), "Concussion rifle"); break;
 				case 16: Com_sprintf(numberStr, sizeof(numberStr), "Bryar"); break;
 				default: Com_sprintf(numberStr, sizeof(numberStr), "Saber"); break;
-				}
-			Q_strncpyz( word, numberStr, sizeof(word));
+			}
+			Q_strncpyz(word, numberStr, sizeof(word));
 		}
 		else if (!Q_stricmp(word, "%A%")) {
-			if (pm)
-				number = pm->ps->ammo[weaponData[pm->ps->weapon].ammoIndex];
+			number = cg.predictedPlayerState.ammo[weaponData[cg.predictedPlayerState.weapon].ammoIndex];
 			Com_sprintf(numberStr, sizeof(numberStr), "%i", number);
-			Q_strncpyz( word, numberStr, sizeof(word));
+			Q_strncpyz(word, numberStr, sizeof(word));
 		}
-
-		Q_strcat(word, MAX_SAY_TEXT, " ");
-		Q_strcat(msg, MAX_SAY_TEXT, word);
-	}
-	//if (command)
-		//trap->SendClientCommand(va( "%s", msg));
-	//else
-		trap->SendClientCommand(va( "say %s", msg));
-}
-
-void CG_TeamSay_f( void ) { 
-	char word[MAX_SAY_TEXT] = {0}, msg[MAX_SAY_TEXT] = {0}, numberStr[MAX_SAY_TEXT] = {0};//eh
-	int i, number = 0, numWords = trap->Cmd_Argc();
-
-	for (i = 1; i < numWords; i++) {
-		trap->Cmd_Argv( i, word, sizeof(word));
-
-		if (!Q_stricmp(word, "%H%")) {
-			if (pm)
-				number = pm->ps->stats[STAT_HEALTH];
+		else if (!Q_stricmp(word, "%P%")) {
+			if (cg.snap) number = cg.snap->ping;
 			Com_sprintf(numberStr, sizeof(numberStr), "%i", number);
-			Q_strncpyz( word, numberStr, sizeof(word));
+			Q_strncpyz(word, numberStr, sizeof(word));
 		}
-		else if (!Q_stricmp(word, "%S%")) {
-			if (pm)
-				number = pm->ps->stats[STAT_ARMOR];
-			Com_sprintf(numberStr, sizeof(numberStr), "%i", number);
-			Q_strncpyz( word, numberStr, sizeof(word));
+		else if (!Q_stricmp(word, "%T%")) { //insert time in 12-hour format
+			struct tm *newtime;
+			qboolean AM = qtrue;
+			time_t rawtime;
+			time(&rawtime);
+			newtime = localtime(&rawtime);
+			if (newtime->tm_hour >= 12) AM = qfalse;
+			if (newtime->tm_hour > 12) newtime->tm_hour -= 12;
+			if (newtime->tm_hour == 0) newtime->tm_hour = 12;
+			Com_sprintf(numberStr, sizeof(numberStr), "%i:%02i %s", newtime->tm_hour, newtime->tm_min, AM ? "AM" : "PM");
+			Q_strncpyz(word, numberStr, sizeof(word));
 		}
-		else if (!Q_stricmp(word, "%F%")) {
-			if (pm)
-				number = pm->ps->fd.forcePower;
-			Com_sprintf(numberStr, sizeof(numberStr), "%i", number);
-			Q_strncpyz( word, numberStr, sizeof(word));
-		}
-		else if (!Q_stricmp(word, "%W%")) {
-			if (pm)
-				number = pm->ps->weapon;
-			switch (number) {
-				case 1:	Com_sprintf(numberStr, sizeof(numberStr), "Stun baton"); break;
-				case 2: Com_sprintf(numberStr, sizeof(numberStr), "Melee"); break;
-				case 4:	Com_sprintf(numberStr, sizeof(numberStr), "Pistol"); break;
-				case 5:	Com_sprintf(numberStr, sizeof(numberStr), "E11"); break;
-				case 6:	Com_sprintf(numberStr, sizeof(numberStr), "Sniper"); break;
-				case 7:	Com_sprintf(numberStr, sizeof(numberStr), "Bowcaster");	break;
-				case 8:	Com_sprintf(numberStr, sizeof(numberStr), "Repeater"); break;
-				case 9:	Com_sprintf(numberStr, sizeof(numberStr), "Demp2");	break;
-				case 10: Com_sprintf(numberStr, sizeof(numberStr), "Flechette"); break;
-				case 11: Com_sprintf(numberStr, sizeof(numberStr), "Rocket"); break;
-				case 12: Com_sprintf(numberStr, sizeof(numberStr), "Thermal"); break;
-				case 13: Com_sprintf(numberStr, sizeof(numberStr), "Tripmine"); break;
-				case 14: Com_sprintf(numberStr, sizeof(numberStr), "Detpack"); break;
-				case 15: Com_sprintf(numberStr, sizeof(numberStr), "Concussion rifle"); break;
-				case 16: Com_sprintf(numberStr, sizeof(numberStr), "Bryar"); break;
-				default: Com_sprintf(numberStr, sizeof(numberStr), "Saber"); break;
-				}
-			Q_strncpyz( word, numberStr, sizeof(word));
-		}
-		else if (!Q_stricmp(word, "%A%")) {
-			if (pm)
-				number = pm->ps->ammo[weaponData[pm->ps->weapon].ammoIndex];
-			Com_sprintf(numberStr, sizeof(numberStr), "%i", number);
-			Q_strncpyz( word, numberStr, sizeof(word));
+		else if (!Q_stricmp(word, "%T2%")) { //insert time in 24-hour format
+			struct tm *newtime;
+			time_t rawtime;
+			time(&rawtime);
+			newtime = localtime(&rawtime);
+			Com_sprintf(numberStr, sizeof(numberStr), "%02i:%02i", newtime->tm_hour, newtime->tm_min);
+			Q_strncpyz(word, numberStr, sizeof(word));
 		}
 
 		Q_strcat(word, MAX_SAY_TEXT, " ");
 		Q_strcat(msg, MAX_SAY_TEXT, word);
 	}
 
-		trap->SendClientCommand(va( "say_team %s", msg));
+	switch (messagetype)
+	{
+		default:
+			Com_Printf("%sUnrecognized command %s\n", S_COLOR_YELLOW, CG_Argv(0));
+			break;
+		case 1:
+			trap->SendClientCommand(va("say %s", msg));
+			break;
+		case 2:
+			trap->SendClientCommand(va("say_team %s", msg));
+			break;
+		case 3:
+			if (clientNum > -1) trap->SendClientCommand(va("tell %i %s", clientNum, msg));
+			break;
+	}
 }
 
 typedef struct consoleCommand_s {
@@ -2091,13 +2157,16 @@ static consoleCommand_t	commands[] = {
 	{ "+zoom",						CG_ZoomDown_f },
 	{ "-zoom",						CG_ZoomUp_f },
 	{ "say",						CG_Say_f },
-	{ "say_team",					CG_TeamSay_f },
+	{ "say_team",					CG_Say_f },
+	{ "tell",						CG_Say_f },
+
 	{ "saber",						CG_Saber_f },
 	{ "saberColor",					CG_Sabercolor_f },
 	{ "amColor",					CG_Amcolor_f },
 	{ "amrun",						CG_AmRun_f },
 	{ "modversion",					CG_ModVersion_f },
 
+	{ "follow",						CG_Follow_f },
 	{ "followRedFlag",				CG_FollowRedFlag_f },
 	{ "followBlueFlag",				CG_FollowBlueFlag_f },
 	{ "followFastest",				CG_FollowFastest_f },
@@ -2109,12 +2178,13 @@ static consoleCommand_t	commands[] = {
 	{ "lowjump",					CG_Lowjump_f },
 	{ "+duck",						CG_NorollDown_f },
 	{ "-duck",						CG_NorollUp_f },
+	{ "+grapple",					CG_GrappleDown_f },
+	{ "-grapple",					CG_GrappleUp_f },
 	{ "plugin",						CG_PluginDisable_f },
 	{ "pluginDisable",				CG_PluginDisable_f },
 	{ "stylePlayer",				CG_StylePlayer_f },
 	{ "speedometer",				CG_SpeedometerSettings_f },
 	{ "cosmetics",					CG_Cosmetics_f },
-
 	{ "chatlog",					CG_ChatLogSettings_f },
 
 	{ "addSpeedsound",				CG_AddSpeedpoint_f },
@@ -2135,7 +2205,7 @@ static consoleCommand_t	commands[] = {
 	{ "listRemaps",					CG_ListRemaps_f },
 	{ "loadTrail",					CG_SpawnStrafeTrailFromCFG_f },
 	{ "weaplast",					CG_LastWeapon_f },
-	{ "do",							CG_Do_f }
+	{ "do",							CG_Do_f },
 };
 
 static const size_t numCommands = ARRAY_LEN( commands );
@@ -2278,6 +2348,8 @@ static const char *gcmds[] = {
 	"amTaunt",
 	"amTaunt2",
 	"amVictory",
+	"amWait",
+
 	"amGrantAdmin",
 	"amListMaps",
 	"race",

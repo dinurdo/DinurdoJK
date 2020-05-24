@@ -2532,6 +2532,7 @@ static void WP_FireRocket( gentity_t *ent, qboolean altFire )
 //---------------------------------------------------------
 {
 	int	damage	= ROCKET_DAMAGE;
+	int splashDamage = ROCKET_SPLASH_DAMAGE;
 	int	vel = ROCKET_VELOCITY;
 	int dif = 0;
 	float rTime;
@@ -2543,7 +2544,7 @@ static void WP_FireRocket( gentity_t *ent, qboolean altFire )
 
 	if (ent->client && ent->client->sess.raceMode) {
 		q3style = qtrue;
-		damage = 100; //force default dmg/vel for racers
+		damage = splashDamage = 100; //force default dmg/vel for racers
 		vel = 900;
 	}
 
@@ -2637,7 +2638,7 @@ static void WP_FireRocket( gentity_t *ent, qboolean altFire )
 //===testing being able to shoot rockets out of the air==================================
 
 	missile->clipmask = MASK_SHOT;
-	missile->splashDamage = ROCKET_SPLASH_DAMAGE;
+	missile->splashDamage = splashDamage;
 	missile->splashRadius = ROCKET_SPLASH_RADIUS;
 
 	// we don't want it to ever bounce
@@ -2668,12 +2669,14 @@ static void WP_CreateMortar( vec3_t start, vec3_t fwd, gentity_t *self)
 	VectorSet( missile->r.mins, -3.0f, -3.0f, -3.0f );
 	VectorSet( missile->r.maxs, 3.0f, 3.0f, 3.0f );
 
+	/*/
 	//===testing being able to shoot rockets out of the air==================================
 	missile->health = 10;
 	missile->takedamage = qtrue;
-	missile->r.contents = MASK_SHOT;
+	missile->r.contents = MASK_SHOT; //solid?
 	missile->die = RocketDie;
 //===testing being able to shoot rockets out of the air==================================
+	*/
 
 	missile->clipmask = MASK_SHOT;
 
@@ -2830,30 +2833,27 @@ gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean altFire )
 
 	W_TraceSetStart( ent, start, bolt->r.mins, bolt->r.maxs );//make sure our start point isn't on the other side of a wall
 
-	if ( ent->client )
-	{
-		chargeAmount = level.time - ent->client->ps.weaponChargeTime;
-	}
-
-	// get charge amount
-	chargeAmount = chargeAmount / (float)TD_VELOCITY;
-
-	if ( chargeAmount > 1.0f )
-	{
-		chargeAmount = 1.0f;
-	}
-	else if ( chargeAmount < TD_MIN_CHARGE )
-	{
-		chargeAmount = TD_MIN_CHARGE;
-	}
-
 	if (g_tweakWeapons.integer & WT_IMPACT_NITRON) {
-		chargeAmount = 0.9f;
+		chargeAmount = 1.0f;
 		altFire = qfalse;
+	}
+	else { // get charge amount
+		if ( ent->client ) {
+			chargeAmount = level.time - ent->client->ps.weaponChargeTime;
+		}
+		chargeAmount = chargeAmount / (float)TD_VELOCITY;
+		if ( chargeAmount > 1.0f )
+			chargeAmount = 1.0f;
+		else if ( chargeAmount < TD_MIN_CHARGE )
+			chargeAmount = TD_MIN_CHARGE;
 	}
 
 	// normal ones bounce, alt ones explode on impact
-	bolt->genericValue5 = level.time + TD_TIME; // How long 'til she blows
+	if (g_tweakWeapons.integer & WT_IMPACT_NITRON)
+		bolt->genericValue5 = level.time + 2000; // How long 'til she blows
+	else
+		bolt->genericValue5 = level.time + TD_TIME; // How long 'til she blows
+
 	bolt->s.pos.trType = TR_GRAVITY;
 	bolt->parent = ent;
 	bolt->r.ownerNum = ent->s.number;
@@ -2873,8 +2873,8 @@ gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean altFire )
 	bolt->s.loopIsSoundset = qfalse;
 
 	if (g_tweakWeapons.integer & WT_IMPACT_NITRON) {
-		bolt->damage = 40 * g_weaponDamageScale.integer;
-		bolt->splashDamage = 10 * g_weaponDamageScale.integer;
+		bolt->damage = 60 * g_weaponDamageScale.integer;
+		bolt->splashDamage = 20 * g_weaponDamageScale.integer;
 		bolt->splashRadius = 96;//128
 	}
 	else {
@@ -3258,6 +3258,17 @@ void laserTrapStick( gentity_t *ent, vec3_t endpos, vec3_t normal )
 
 
 	G_Sound( ent, CHAN_WEAPON, G_SoundIndex( "sound/weapons/laser_trap/stick.wav" ) );
+
+	//shove the box through the wall
+	if (!g_fixExplosiveHitboxes.integer) {
+		VectorSet( ent->r.mins, -LT_SIZE*2, -LT_SIZE*2, -LT_SIZE*2 );
+		VectorSet( ent->r.maxs, LT_SIZE*2, LT_SIZE*2, LT_SIZE*2 );
+	}
+	else { //make it larger so it's easier to shoot it from the side
+		VectorSet( ent->r.mins, -LT_SIZE*3.5f, -LT_SIZE*3.5f, -LT_SIZE*3.5f );
+		VectorSet( ent->r.maxs, LT_SIZE*3.5f, LT_SIZE*3.5f, LT_SIZE*3.5f );
+	}
+
 	if ( ent->count )
 	{//a tripwire
 		//add draw line flag
@@ -3269,10 +3280,6 @@ void laserTrapStick( gentity_t *ent, vec3_t endpos, vec3_t normal )
 		ent->takedamage = qtrue;
 		ent->health = 5;
 		ent->die = laserTrapDelayedExplode;
-
-		//shove the box through the wall
-		VectorSet( ent->r.mins, -LT_SIZE*2, -LT_SIZE*2, -LT_SIZE*2 );
-		VectorSet( ent->r.maxs, LT_SIZE*2, LT_SIZE*2, LT_SIZE*2 );
 
 		//so that the owner can blow it up with projectiles
 		ent->r.svFlags |= SVF_OWNERNOTSHARED;
@@ -3291,10 +3298,6 @@ void laserTrapStick( gentity_t *ent, vec3_t endpos, vec3_t normal )
 		ent->takedamage = qtrue;
 		ent->health = 5;
 		ent->die = laserTrapDelayedExplode;
-
-		//shove the box through the wall
-		VectorSet( ent->r.mins, -LT_SIZE*2, -LT_SIZE*2, -LT_SIZE*2 );
-		VectorSet( ent->r.maxs, LT_SIZE*2, LT_SIZE*2, LT_SIZE*2 );
 
 		//so that the owner can blow it up with projectiles
 		ent->r.svFlags |= SVF_OWNERNOTSHARED;
@@ -3335,8 +3338,16 @@ void CreateLaserTrap( gentity_t *laserTrap, vec3_t start, gentity_t *owner )
 	laserTrap->parent = owner;
 	laserTrap->activator = owner;
 	laserTrap->r.ownerNum = owner->s.number;
-	VectorSet( laserTrap->r.mins, -LT_SIZE, -LT_SIZE, -LT_SIZE );
-	VectorSet( laserTrap->r.maxs, LT_SIZE, LT_SIZE, LT_SIZE );
+	if (!g_fixExplosiveHitboxes.integer)
+	{
+		VectorSet( laserTrap->r.mins, -LT_SIZE, -LT_SIZE, -LT_SIZE );
+		VectorSet( laserTrap->r.maxs, LT_SIZE, LT_SIZE, LT_SIZE );
+	}
+	else if (g_fixExplosiveHitboxes.integer != 2)
+	{ //setting to 2 will have 0 mins/maxs when latching onto surfaces
+		VectorSet(laserTrap->r.mins, -LT_SIZE, -LT_SIZE, 0);
+		VectorSet(laserTrap->r.maxs, LT_SIZE, LT_SIZE, LT_SIZE * 2);
+	}
 	laserTrap->clipmask = MASK_SHOT;
 	laserTrap->s.solid = 2;
 	laserTrap->s.modelindex = G_ModelIndex( "models/weapons2/laser_trap/laser_trap_w.glm" );
@@ -3666,9 +3677,15 @@ void drop_charge (gentity_t *self, vec3_t start, vec3_t dir)
 	bolt->s.genericenemyindex = self->s.number+MAX_GENTITIES;
 	//rww - so client prediction knows we own this and won't hit it
 
-	VectorSet( bolt->r.mins, -2, -2, -2 );
-	VectorSet( bolt->r.maxs, 2, 2, 2 );
-	
+	if (!g_fixExplosiveHitboxes.integer) {
+		VectorSet( bolt->r.mins, -2, -2, -2 );
+		VectorSet( bolt->r.maxs, 2, 2, 2 );
+	}
+	else {
+		VectorSet( bolt->r.mins, -2, -2, 0 );
+		VectorSet( bolt->r.maxs, 2, 2, 4 );
+	}
+
 	bolt->pain = DetPackPain;
 	bolt->die = DetPackDie;
 

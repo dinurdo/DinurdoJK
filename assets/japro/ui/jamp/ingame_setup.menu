@@ -3111,6 +3111,32 @@
 		}
 		
 		itemDef 
+		{			
+			name				drawchatboxemojis
+			group				morevisuals
+	  		type				ITEM_TYPE_MULTI
+			text				"Draw Emojis:"
+			cvar				"cg_chatboxemojis"
+			cvarFloatList
+			{
+				@MENUS_OFF 0
+				@MENUS_ON 1
+			}
+			rect				220 283 300 20
+				textalign			ITEM_ALIGN_RIGHT
+			textalignx			165
+			textaligny			0
+			font 				4
+			textscale 			1
+			forecolor			.615 .615 .956 1
+			visible				0
+			descText			"Toggle to enable chat emojis."
+			action				{ play "sound/interface/button1" }
+			mouseenter			{ show highlight13 }
+			mouseexit			{ hide highlight13 }
+		}
+
+		itemDef 
 		{
 			name				done2button_glow
 			style				WINDOW_STYLE_SHADER
@@ -3212,10 +3238,10 @@
 			group				hud
 	  		type				ITEM_TYPE_CHECKBOX
 			text				"Speed Graph:"
-			cvar				"cg_speedometerSettings"	
-			bitMask				"6"
+			cvar				"cg_speedometer"	
+			bitMask				"7"
 			rect				220 83 300 20
-				textalign			ITEM_ALIGN_RIGHT
+			textalign			ITEM_ALIGN_RIGHT
 			textalignx			165
 			textaligny			0
 			font 				4
@@ -3971,7 +3997,7 @@
 			group				options
 	  		type				ITEM_TYPE_MULTI
 			text				@MENUS_IDENTIFY_TARGET
-			cvar				"cg_drawCrosshairNames"	
+			cvar				"cg_crosshairIdentifyTarget"	
 			cvarFloatList		
 			{ 
 				@MENUS_OFF 0  

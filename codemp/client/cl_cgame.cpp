@@ -203,6 +203,87 @@ void CL_DoAutoLODScale(void)
 	Cvar_Set( "r_autolodscalevalue", va("%f", finalLODScaleFactor) );
 }
 
+#if defined(DISCORD) && !defined(_DEBUG)
+static void CL_UpdateDiscordServerInfo(const char *info)
+{
+	char *value = NULL;
+
+	cl.discord.needPassword = qfalse;
+
+	value = Info_ValueForKey(info, "sv_hostname");
+	Q_strncpyz(cl.discord.hostName, value, sizeof(cl.discord.hostName));
+
+	cl.discord.maxPlayers = atoi(Info_ValueForKey(info, "sv_maxclients"));
+	cl.discord.timelimit = atoi(Info_ValueForKey(info, "timelimit"));
+	cl.discord.gametype = atoi(Info_ValueForKey(info, "g_gametype"));
+
+	value = Info_ValueForKey(info, "g_needpass");
+	if (atoi(value))
+		cl.discord.needPassword = qtrue;
+
+	value = Info_ValueForKey(info, "mapname");
+	Q_strncpyz(cl.discord.mapName, value, sizeof(cl.discord.mapName));
+}
+#endif
+
+static void CL_ParsePlayerInfo(int start, int end)
+{
+	int clientCount = 0, botCount = 0, redTeam = 0, blueTeam = 0, specTeam = 0;
+	int i = start;
+
+	while (i < end)
+	{
+		char *s = cl.gameState.stringData + cl.gameState.stringOffsets[i];
+		int team = atoi(Info_ValueForKey(s, "t"));
+		char *bot = Info_ValueForKey(s, "skill");
+
+		switch (team)
+		{
+		default:
+		case 0:
+			break;
+		case 1:
+			redTeam++;
+			break;
+		case 2:
+			blueTeam++;
+			break;
+		case 3:
+			specTeam++;
+			break;
+		}
+
+		if (bot && bot[0])
+		{
+			botCount++;
+		}
+
+		if (s && s[0])
+		{
+			clientCount++;
+		}
+
+		i++;
+	}
+
+	gCLTotalClientNum = clientCount;
+
+#ifdef _DEBUG
+	Com_DPrintf("%i clients\n", gCLTotalClientNum);
+#endif
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	cl.discord.playerCount = clientCount;
+	cl.discord.redTeam = redTeam;
+	cl.discord.blueTeam = blueTeam;
+	cl.discord.specCount = specTeam;
+	cl.discord.botCount = botCount;
+#endif
+
+	if (cl_autolodscale && cl_autolodscale->integer)
+		CL_DoAutoLODScale();
+}
+
 /*
 =====================
 CL_ConfigstringModified
@@ -257,35 +338,22 @@ void CL_ConfigstringModified( void ) {
 		cl.gameState.dataCount += len + 1;
 	}
 
-	if (cl_autolodscale && cl_autolodscale->integer)
+	if (index >= CS_PLAYERS &&
+		index < CS_G2BONES)
+	{ //this means that a client was updated in some way. Go through and count the clients.
+		CL_ParsePlayerInfo(CS_PLAYERS, CS_G2BONES);
+	}
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	if (index == CS_SERVERINFO)
 	{
-		if (index >= CS_PLAYERS &&
-			index < CS_G2BONES)
-		{ //this means that a client was updated in some way. Go through and count the clients.
-			int clientCount = 0;
-			i = CS_PLAYERS;
+		s = cl.gameState.stringData + cl.gameState.stringOffsets[CS_SERVERINFO];
 
-			while (i < CS_G2BONES)
-			{
-				s = cl.gameState.stringData + cl.gameState.stringOffsets[ i ];
-
-				if (s && s[0])
-				{
-					clientCount++;
-				}
-
-				i++;
-			}
-
-			gCLTotalClientNum = clientCount;
-
-#ifdef _DEBUG
-			Com_DPrintf("%i clients\n", gCLTotalClientNum);
-#endif
-
-			CL_DoAutoLODScale();
+		if (s && s[0]) {
+			CL_UpdateDiscordServerInfo(s);
 		}
 	}
+#endif
 
 	if ( index == CS_SYSTEMINFO ) {
 		// parse serverId and other cvars
@@ -381,7 +449,7 @@ extern cvar_t	*con_notifyvote;
 extern char	notifyWords[MAX_NOTIFYWORDS][32];
 extern int stampColor;
 
-
+extern void QDECL CL_LogPrintf(fileHandle_t fileHandle, const char *fmt, ...);
 qboolean CL_GetServerCommand( int serverCommandNumber ) {
 	const char *s;
 	const char *cmd;
@@ -490,7 +558,8 @@ rescan:
 		return qtrue;
 	}
 
-	if (!strcmp(cmd, "chat") || !strcmp(cmd, "tchat")) {
+	if (!Q_stricmp(cmd, "chat") || !Q_stricmp(cmd, "tchat") || !Q_stricmp(cmd, "lchat") || !Q_stricmp(cmd, "ltchat"))
+	{
 		if (cl_logChat->integer) {
 			char chat[MAX_NETNAME + MAX_SAY_TEXT + 12];
 			int i, l;
@@ -508,7 +577,7 @@ rescan:
 			}
 			chat[l] = '\0';
 
-			CL_LogPrintf(cls.log.chat, chat);
+			CL_LogPrintf(cls.log.file, chat);
 		}
 
 		stampColor = COLOR_WHITE;
@@ -519,7 +588,7 @@ rescan:
 		}
 		else
 #endif
-		if (strcmp(con_notifywords->string, "0")) {
+		if (Q_stricmp(con_notifywords->string, "0")) {
 			char *text = Q_strrchr(s, ':');
 			if (text) {
 				int i;
@@ -538,7 +607,7 @@ rescan:
 		return qtrue;
 	}
 
-	if (!strcmp(cmd, "print")) {
+	if (!Q_stricmp(cmd, "print")) {
 		s = Cmd_Argv(1);
 		if (Q_stristr(s, "@@@PLCONNECT") || Q_stristr(s, "@@@DISCONNECT") || Q_stristr(s, "@@@WAS_KICKED") || Q_stristr(s, "timed out")) {
 			stampColor = COLOR_YELLOW;
@@ -563,12 +632,43 @@ rescan:
 	return qtrue;
 }
 
+void QDECL CL_LogPrintf(fileHandle_t fileHandle, const char *fmt, ...) {
+	va_list argptr;
+	char string[1024] = { 0 };
+	size_t len;
+	time_t rawtime;
+	time(&rawtime);
+
+	if (clc.demoplaying)
+		return;
+	
+	if (!cls.log.started) {
+		cls.log.started = qtrue;
+		CL_LogPrintf(fileHandle, "Start log\n--------------------------------------------------------------\n\n");
+	}
+
+	strftime(string, sizeof(string), "[%Y-%m-%d] [%H:%M:%S] ", localtime(&rawtime));
+
+	len = strlen(string);
+
+	va_start(argptr, fmt);
+	Q_vsnprintf(string + len, sizeof(string) - len, fmt, argptr);
+	va_end(argptr);
+
+	if (!fileHandle)
+		return;
+
+	FS_Write(string, strlen(string), fileHandle);
+}
+
 static void CL_OpenLog(const char *filename, fileHandle_t *f, qboolean sync) {
 	FS_FOpenFileByMode(filename, f, sync ? FS_APPEND_SYNC : FS_APPEND);
 	if (*f)
 		Com_Printf("Logging to %s\n", filename);
 	else
 		Com_Printf("^3WARNING: Couldn't open logfile: %s\n", filename);
+
+	cls.log.started = qfalse;
 }
 
 static void CL_CloseLog(fileHandle_t *f) {
@@ -577,6 +677,8 @@ static void CL_CloseLog(fileHandle_t *f) {
 
 	FS_FCloseFile(*f);
 	*f = NULL_FILE;
+
+	cls.log.started = qfalse;
 }
 
 /*
@@ -596,8 +698,8 @@ void CL_ShutdownCGame( void ) {
 	CL_UnbindCGame();
 
 	if (cl_logChat->integer) {
-		CL_LogPrintf(cls.log.chat, "End logging\n------------------------------------------------------------\n\n");
-		CL_CloseLog(&cls.log.chat);
+		if (cls.log.started) CL_LogPrintf(cls.log.file, "End log\n----------------------------------------------------------------\n\n");
+		CL_CloseLog(&cls.log.file);
 	}
 }
 
@@ -623,6 +725,10 @@ void CL_InitCGame( void ) {
 	info = cl.gameState.stringData + cl.gameState.stringOffsets[ CS_SERVERINFO ];
 	mapname = Info_ValueForKey( info, "mapname" );
 	Com_sprintf( cl.mapname, sizeof( cl.mapname ), "maps/%s.bsp", mapname );
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	CL_UpdateDiscordServerInfo(info);
+#endif
 
 	// load the dll
 	CL_BindCGame();
@@ -673,10 +779,11 @@ void CL_InitCGame( void ) {
 		newtime = localtime(&rawtime);
 		strftime(logname, sizeof(logname), "chatlogs/cl_%y-%b.log", newtime);
 
-		CL_OpenLog(logname, &cls.log.chat, (cl_logChat->integer == 2 ? qtrue : qfalse));
+		CL_OpenLog(logname, &cls.log.file, (cl_logChat->integer == 2 ? qtrue : qfalse));
 	}
-	else
+	else {
 		Com_DPrintf("Not logging chat to disk.\n");
+	}
 }
 
 
@@ -823,7 +930,6 @@ CL_SetCGameTime
 ==================
 */
 void CL_SetCGameTime( void ) {
-	qboolean demoFreezed;
 
 	// getting a valid frame message ends the connection process
 	if ( cls.state != CA_ACTIVE ) {
@@ -867,11 +973,12 @@ void CL_SetCGameTime( void ) {
 
 	// get our current view of time
 
-	demoFreezed = (qboolean)(clc.demoplaying && com_timescale->value == 0.0f);
-	if (demoFreezed) {
-		// \timescale 0 is used to lock a demo in place for single frame advances
+	if ( clc.demoplaying && (!com_timescale->value || cl_paused->integer) )
+	{
+		// timescale 0 is used to lock a demo in place for single frame advances
 		cl.serverTimeDelta -= cls.frametime;
-	} else
+	}
+	else
 	{
 		// cl_timeNudge is a user adjustable cvar that allows more
 		// or less latency to be added in the interest of better

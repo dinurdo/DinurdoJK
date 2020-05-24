@@ -122,42 +122,35 @@ CG_Obituary
 =============
 */
 static void CG_Obituary( entityState_t *ent ) {
-	int			mod;
-	int			target, attacker;
-	char		*message;
-	const char	*targetInfo;
-	const char	*attackerInfo;
-	char		targetName[32];
-	char		attackerName[32];
-	gender_t	gender;
-	clientInfo_t	*ci;
-
-
-	target = ent->otherEntityNum;
-	attacker = ent->otherEntityNum2;
-	mod = ent->eventParm;
+	int				target = ent->otherEntityNum;
+	int				attacker = ent->otherEntityNum2;
+	int				mod = ent->eventParm;
+	char			*message = NULL;
+	clientInfo_t	*targetInfo = NULL;
+	clientInfo_t	*attackerInfo = NULL;
+	char			targetName[MAX_NETNAME+2] = {0};
+	char			attackerName[MAX_NETNAME+2] = {0};
+	gender_t		gender = GENDER_MALE;
 
 	if ( target < 0 || target >= MAX_CLIENTS ) {
 		trap->Error( ERR_DROP, "CG_Obituary: target out of range" );
 	}
-	ci = &cgs.clientinfo[target];
 
 	if ( attacker < 0 || attacker >= MAX_CLIENTS ) {
 		attacker = ENTITYNUM_WORLD;
 		attackerInfo = NULL;
 	} else {
-		attackerInfo = CG_ConfigString( CS_PLAYERS + attacker );
+		attackerInfo = &cgs.clientinfo[attacker];
 	}
 
-	targetInfo = CG_ConfigString( CS_PLAYERS + target );
-	if ( !targetInfo ) {
+	targetInfo = &cgs.clientinfo[target];
+	if ( !targetInfo || !targetInfo->infoValid ) {
 		return;
 	}
-	Q_strncpyz( targetName, Info_ValueForKey( targetInfo, "n" ), sizeof(targetName) - 2);
-	strcat( targetName, S_COLOR_WHITE );
+	Com_sprintf(targetName, sizeof(targetName), "%s%s", targetInfo->name, S_COLOR_WHITE);
+	targetInfo->deaths++;
 
 	// check for single client messages
-
 	switch( mod ) {
 	case MOD_SUICIDE:
 	case MOD_FALLING:
@@ -178,7 +171,7 @@ static void CG_Obituary( entityState_t *ent ) {
 
 	// Attacker killed themselves.  Ridicule them for it.
 	if (attacker == target) {
-		gender = ci->gender;
+		gender = targetInfo->gender;
 		switch (mod) {
 		case MOD_BRYAR_PISTOL:
 		case MOD_BRYAR_PISTOL_ALT:
@@ -252,7 +245,7 @@ static void CG_Obituary( entityState_t *ent ) {
 	}
 
 	if (message) {
-		gender = ci->gender;
+		gender = targetInfo->gender;
 
 		if (!message[0])
 		{
@@ -266,8 +259,6 @@ static void CG_Obituary( entityState_t *ent ) {
 		message = (char *)CG_GetStringEdString("MP_INGAME", message);
 
 		trap->Print( "%s %s\n", targetName, message);
-		if (cg_logChat.integer & JAPRO_CHATLOG_DEATHS)
-			CG_LogPrintf(cg.log.chat, "%s %s\n", targetName, message);
 		return;
 	}
 
@@ -275,9 +266,9 @@ clientkilled:
 
 	// check for kill messages from the current clientNum
 	if ( attacker == cg.snap->ps.clientNum ) {
-		char	*s;
+		char s[MAX_STRING_CHARS] = {0};
 
-		if ( cgs.gametype < GT_TEAM && cgs.gametype != GT_DUEL && cgs.gametype != GT_POWERDUEL ) {
+		if ( cg_killMessage.integer != 2 && cgs.gametype < GT_TEAM && cgs.gametype != GT_DUEL && cgs.gametype != GT_POWERDUEL ) {
 			if (cgs.gametype == GT_JEDIMASTER &&
 				attacker < MAX_CLIENTS &&
 				!ent->isJediMaster &&
@@ -288,7 +279,7 @@ clientkilled:
 				char part2[512];
 				trap->SE_GetStringTextString("MP_INGAME_KILLED_MESSAGE", part1, sizeof(part1));
 				trap->SE_GetStringTextString("MP_INGAME_JMKILLED_NOTJM", part2, sizeof(part2));
-				s = va("%s %s\n%s\n", part1, targetName, part2);
+				Com_sprintf(s, sizeof(s), "%s %s\n%s\n", part1, targetName, part2);
 			}
 			else if (cgs.gametype == GT_JEDIMASTER &&
 				attacker < MAX_CLIENTS &&
@@ -301,13 +292,13 @@ clientkilled:
 				kmsg1 = "for 0 points.\nGo for the saber!";
 				strcpy(part2, kmsg1);
 
-				s = va("%s %s %s\n", part1, targetName, part2);
+				Com_sprintf(s, sizeof(s), "%s %s %s\n", part1, targetName, part2);
 				*/
-				s = va("%s %s\n", part1, targetName);
+				Com_sprintf(s, sizeof(s), "%s %s\n", part1, targetName);
 			}
 			else if (cgs.gametype == GT_POWERDUEL)
 			{
-				s = "";
+				Q_strncpyz(s, "", sizeof(s));
 			}
 			else
 			{
@@ -316,7 +307,7 @@ clientkilled:
 				trap->SE_GetStringTextString("MP_INGAME_PLACE_WITH",     sPlaceWith, sizeof(sPlaceWith));
 				trap->SE_GetStringTextString("MP_INGAME_KILLED_MESSAGE", sKilledStr, sizeof(sKilledStr));
 
-				s = va("%s %s.\n%s %s %i.", sKilledStr, targetName,
+				Com_sprintf(s, sizeof(s), "%s %s\n%s %s %i.", sKilledStr, targetName,
 					CG_PlaceString( cg.snap->ps.persistant[PERS_RANK] + 1 ),
 					sPlaceWith,
 					cg.snap->ps.persistant[PERS_SCORE] );
@@ -324,29 +315,21 @@ clientkilled:
 		} else {
 			char sKilledStr[256];
 			trap->SE_GetStringTextString("MP_INGAME_KILLED_MESSAGE", sKilledStr, sizeof(sKilledStr));
-			s = va("%s %s", sKilledStr, targetName );
+			Com_sprintf(s, sizeof(s), "%s %s", sKilledStr, targetName );
 		}
-		//if (!(cg_singlePlayerActive.integer && cg_cameraOrbit.integer)) {
-			if (cg_killMessage.integer == 1)//JAPRO - Clientside - Toggle Kill award message
-				CG_CenterPrintMultiKill( s, SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
-			else if (cg_killMessage.integer > 1)//JAPRO - Clientside - Toggle Kill award message
-				CG_CenterPrintMultiKill( s, SCREEN_HEIGHT * 0.10, BIGCHAR_WIDTH );
-		//}
-		// print the text message as well
 
-			//if (cg_killBeep.integer == 1)
-				//trap->S_StartLocalSound( cgs.media.killSound, CHAN_LOCAL_SOUND );
-			//else if (cg_killBeep.integer == 2)
-				//trap->S_StartLocalSound( cgs.media.hitSound2, CHAN_LOCAL_SOUND ); 
+		if (cg_killMessage.integer == 1 || cg_killMessage.integer == 2)//JAPRO - Clientside - Toggle Kill award message
+			CG_CenterPrintMultiKill( s, SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
+		else if (cg_killMessage.integer > 2)//JAPRO - Clientside - Toggle Kill award message
+			CG_CenterPrintMultiKill( s, SCREEN_HEIGHT * 0.10, BIGCHAR_WIDTH );
 	}
 
 	// check for double client messages
-	if ( !attackerInfo ) {
+	if ( !attackerInfo || !attackerInfo->infoValid ) {
 		attacker = ENTITYNUM_WORLD;
-		strcpy( attackerName, "noname" );
+		Q_strncpyz( attackerName, "noname", sizeof(attackerName) );
 	} else {
-		Q_strncpyz( attackerName, Info_ValueForKey( attackerInfo, "n" ), sizeof(attackerName) - 2);
-		strcat( attackerName, S_COLOR_WHITE );
+		Com_sprintf(attackerName, sizeof(attackerName), "%s%s", attackerInfo->name, S_COLOR_WHITE);
 		// check for kill messages about the current clientNum
 		if ( target == cg.snap->ps.clientNum ) {
 			Q_strncpyz( cg.killerName, attackerName, sizeof( cg.killerName ) );
@@ -455,16 +438,12 @@ clientkilled:
 
 			trap->Print( "%s %s %s\n",
 				targetName, message, attackerName);
-			if (cg_logChat.integer & JAPRO_CHATLOG_DEATHS)
-				CG_LogPrintf(cg.log.chat, "%s %s %s\n", targetName, message, attackerName);
 			return;
 		}
 	}
 
 	// we don't know what it was
 	trap->Print( "%s %s\n", targetName, (char *)CG_GetStringEdString("MP_INGAME", "DIED_GENERIC") );
-	if (cg_logChat.integer & JAPRO_CHATLOG_DEATHS)
-		CG_LogPrintf(cg.log.chat, "%s %s\n", targetName, (char *)CG_GetStringEdString("MP_INGAME", "DIED_GENERIC"));
 }
 
 //==========================================================================
@@ -1655,9 +1634,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 	case EV_FALL:
 		DEBUGNAME("EV_FALL");
 		if (es->number == cg.snap->ps.clientNum && cg.snap->ps.fallingToDeath)
-		{
 			break;
-		}
 		if (cg.predictedPlayerState.duelInProgress && (cg.predictedPlayerState.clientNum != es->clientNum && cg.predictedPlayerState.duelIndex != es->clientNum))
 			break;
 		DoFall(cent, es, clientNum);
@@ -1735,13 +1712,12 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 //JAPRO - Clientside - Fullforce Duels - Start
 		if (es->eventParm)
 		{ //starting the duel
-			//if (es->eventParm == 2)
-			//if (es->eventParm == 5) //RoAR mod NOTE: OH! Found it.
-			//{
-				//CG_CenterPrint( CG_GetStringEdString("MP_SVGAME", "BEGIN_DUEL"), 120, GIANTCHAR_WIDTH*2 );				
-				//trap->S_StartLocalSound( cgs.media.countFightSound, CHAN_ANNOUNCER );
-			//}
-			//else
+			if (cg_duelSounds.integer && es->eventParm == 2 && !(cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE]))
+			{
+				if (cg_duelSounds.integer != 2) CG_CenterPrint( CG_GetStringEdString("MP_SVGAME", "BEGIN_DUEL"), 120, GIANTCHAR_WIDTH*2 );				
+				if (cg_duelSounds.integer != 3) trap->S_StartLocalSound( cgs.media.countFightSound, CHAN_ANNOUNCER );
+			}
+			else
 			{ // signalling duel type with parameter number. Also, for clients in duel, start duel music
 				cg_dueltypes[es->number] = es->eventParm; // set dueltype for partner #1//Why - 1  you fucks gun duel
 				if (!(cg.snap->ps.duelInProgress))
@@ -1782,29 +1758,39 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		break;
 	case EV_ROLL:
 		DEBUGNAME("EV_ROLL");
+		//JAPRO - Clientside - Fix looping roll animation on other players - Start
+		if (cg_entities[es->number].currentState.eType != ET_NPC && !cg_entities[es->number].currentState.m_iVehicleNum) {
+			cg_entities[es->number].currentState.torsoFlip ^= qtrue;
+			cg_entities[es->number].currentState.legsFlip ^= qtrue;
+
+			if ((cg.predictedPlayerState.pm_flags & PMF_FOLLOW) && es->number == cg.predictedPlayerState.clientNum) {
+				cg.predictedPlayerState.torsoFlip ^= qtrue;
+				cg.predictedPlayerState.legsFlip ^= qtrue;
+
+				if (cg.snap) {//ugly hack
+					cg.snap->ps.torsoFlip ^= qtrue;
+					cg.snap->ps.legsFlip ^= qtrue;
+				}
+				if (cg.nextSnap) {//xd
+					cg.nextSnap->ps.torsoFlip ^= qtrue;
+					cg.nextSnap->ps.legsFlip ^= qtrue;
+				}
+			}
+		}
+		//JAPRO - Clientside - Fix looping roll animation on other players - End
 		if (es->number == cg.snap->ps.clientNum && cg.snap->ps.fallingToDeath)
-		{
 			break;
-		}
-		if (cg.predictedPlayerState.duelInProgress && (cg.predictedPlayerState.clientNum != es->clientNum && cg.predictedPlayerState.duelIndex != es->clientNum))
+		if (cg.predictedPlayerState.duelInProgress && (es->clientNum != cg.predictedPlayerState.clientNum && es->clientNum != cg.predictedPlayerState.duelIndex))
 			break;
-		if (es->eventParm)
-		{ //fall-roll-in-one event
+		if (es->eventParm) //fall-roll-in-one event
 			DoFall(cent, es, clientNum);
-		}
 
 		if (cg_rollSounds.integer == 1)//JAPRO - Clientside - Add rollsounds options
-		{
-			trap->S_StartSound (NULL, es->number, CHAN_VOICE, CG_CustomSound( es->number, "*jump1.wav" ) );
-		}
+			trap->S_StartSound( NULL, es->number, CHAN_VOICE, CG_CustomSound( es->number, "*roll" ) );
 		else if (cg_rollSounds.integer == 2 && cg.snap->ps.clientNum != es->number)
-		{
-			trap->S_StartSound (NULL, es->number, CHAN_VOICE, CG_CustomSound( es->number, "*jump1.wav" ) );
-		}
+			trap->S_StartSound( NULL, es->number, CHAN_VOICE, CG_CustomSound( es->number, "*roll" ) );
 		else if (cg_rollSounds.integer > 2 && cg.snap->ps.clientNum == es->number)
-		{
-			trap->S_StartSound (NULL, es->number, CHAN_VOICE, CG_CustomSound( es->number, "*jump1.wav" ) );
-		}
+			trap->S_StartSound( NULL, es->number, CHAN_VOICE, CG_CustomSound( es->number, "*roll" ) );
 
 		trap->S_StartSound( NULL, es->number, CHAN_BODY, cgs.media.rollSound  );
 
@@ -1838,8 +1824,11 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 				default:
 					if ( Q_irand( 0, 1 ) ) { //use razors taunt system so it also plays taunt.wav 
 						int num = Q_irand( 0, 3 );
-						if ( num )
+						if ( num ) {
 							soundIndex = CG_CustomSound( es->number, va( "*anger%d.wav", num ) );
+							if (!soundIndex)
+								soundIndex = CG_CustomSound(es->number, va("*taunt%d.wav", num));
+						}
 						if ( !num || !soundIndex )
 							soundIndex = CG_CustomSound( es->number, "*taunt.wav" );
 					}
@@ -3133,7 +3122,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 	case EV_SCOREPLUM:
 		DEBUGNAME("EV_SCOREPLUM");
-		if (cgs.isJAPro && cent->currentState.eventParm == 1)
+		if (cgs.serverMod == SVMOD_JAPRO && cent->currentState.eventParm == 1)
 			CG_SpotIcon( cent->currentState.otherEntityNum, cent->lerpOrigin );
 		else
 			CG_ScorePlum( cent->currentState.otherEntityNum, cent->lerpOrigin, cent->currentState.time );
@@ -3599,15 +3588,9 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 				if (ci->team == ourTeam || isGlobalVGS(s)) //put it to console or.. just not at all?
 				{ //add to the chat box
 					//hear it in the world spot.
-					char vchatstr[1024] = {0};
-					Q_strncpyz(vchatstr, va("<%s^7: %s>\n", ci->name, descr), sizeof( vchatstr ) );
-					CG_ChatBox_AddString(vchatstr);
-					if (ui_vgs.integer > 1) {
-						if (cg_chatBox.integer)
-							trap->Print("*%s", vchatstr); //supress in top left w/ the chatbox enabled
-						else
-							trap->Print(vchatstr);
-					}
+					char vchatstr[MAX_NETNAME+MAX_SAY_TEXT] = {0};
+					Com_sprintf( vchatstr, sizeof( vchatstr ), "<%s^7: %s>", ci->name, descr );
+					CG_ChatBox_AddString( vchatstr );
 				}
 
 				if (ci->team == ourTeam || isGlobalVGS(s))
@@ -3622,7 +3605,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 	case EV_GENERAL_SOUND:
 		DEBUGNAME("EV_GENERAL_SOUND");
-			/*if (cgs.isJAPro) { // If it is japro
+			/*if (cgs.serverMod == SVMOD_JAPRO) { // If it is japro
 				if (cg.snap->ps.duelInProgress) {// If we are dueling loda fixme
 					if (cent->currentState.owner != cg.snap->ps.clientNum && cent->currentState.owner != cg.snap->ps.duelIndex) // If sound did not come from me or dueler
 						break;
@@ -3632,7 +3615,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 				//}
 			}*/
 
-			if (cgs.isJAPro) {
+			if (cgs.serverMod == SVMOD_JAPRO) {
 				if ((es->eFlags2 & RS_TIMER_START) && !(cg_raceSounds.integer & RS_TIMER_START)) //Its a timer_start race sound.
 					break;
 			}
@@ -3858,7 +3841,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			trap->S_StartSound(NULL, es->number, CHAN_BODY, cgs.media.gibSound);
 			CG_GibPlayer(cent->lerpOrigin);
 		}
-		else if (!(cent->currentState.eFlags & EF_DEAD)) {
+		else if (!(es->eFlags & EF_DEAD)) {
 			trap->S_StartSound(NULL, es->number, CHAN_VOICE,
 				CG_CustomSound(cent->currentState.number, va("*death%i.wav", Q_irand(1, 3))));
 		}

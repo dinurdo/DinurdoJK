@@ -748,12 +748,13 @@ Ghoul2 Insert End
 				{
 					if (!thirdPerson)
 					{
-						trap->FX_PlayEntityEffectID(weapon->altMuzzleEffect, flashorigin, flash.axis, -1, -1, -1, -1  );
+						trap->FX_PlayEntityEffectID(weapon->altMuzzleEffect, flashorigin, flash.axis, -1, -1, -1, -1);
 					}
 					else
 					{
 						trap->FX_PlayEffectID(weapon->altMuzzleEffect, flashorigin, flashdir, -1, -1, qfalse);
 					}
+					cent->muzzleFlashTime = 0; //japro - fix loud gunshots with high fps
 				}
 			}
 			else
@@ -762,12 +763,13 @@ Ghoul2 Insert End
 				{
 					if (!thirdPerson)
 					{
-						trap->FX_PlayEntityEffectID(weapon->muzzleEffect, flashorigin, flash.axis, -1, -1, -1, -1  );
+						trap->FX_PlayEntityEffectID(weapon->muzzleEffect, flashorigin, flash.axis, -1, -1, -1, -1);
 					}
 					else
 					{
 						trap->FX_PlayEffectID(weapon->muzzleEffect, flashorigin, flashdir, -1, -1, qfalse);
 					}
+					cent->muzzleFlashTime = 0; //japro - fix loud gunshots with high fps
 				}
 			}
 		}
@@ -921,10 +923,19 @@ void CG_AddViewWeapon( playerState_t *ps ) {
 		hand.shaderRGBA[3] = cg_gunAlpha.value * 255;
 	}
 
-	if (cg_stylePlayer.integer & JAPRO_STYLE_FULLBRIGHT)
-		hand.renderfx |= RF_FULLBRIGHT;
+	if (cg_stylePlayer.integer & JAPRO_STYLE_FULLBRIGHT) {
+		if (cgs.jaPROEngine) {
+			hand.renderfx |= RF_FULLBRIGHT;
+		}
+		else {
+			hand.shaderRGBA[0] = 255;
+			hand.shaderRGBA[1] = 255;
+			hand.shaderRGBA[2] = 255;
+			hand.renderfx |= RF_RGB_TINT;
+		}
+	}
 
-	if (!(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD))
+	if (cgs.jaPROEngine && !(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD))
 		hand.renderfx |= RF_NOLOD; //isnt working??
 
 	// add everything onto the hand
@@ -945,7 +956,7 @@ WEAPON SELECTION
 
 void CG_DrawIconBackground(void)
 {
-	int				height, xAdd, x2, y2, t;
+	float			height, xAdd, x2, y2, t;
 	float			inTime = cg.invenSelectTime+WEAPON_SELECT_TIME;
 	float			wpTime = cg.weaponSelectTime+WEAPON_SELECT_TIME;
 	float			fpTime = cg.forceSelectTime+WEAPON_SELECT_TIME;
@@ -953,10 +964,11 @@ void CG_DrawIconBackground(void)
 	int				drawType = cgs.media.weaponIconBackground;
 	int				yOffset = 0;
 	qhandle_t		background;
-	int				prongsOn = cgs.media.JK2weaponProngsOn;
+	qhandle_t		prongsOn = cgs.media.JK2weaponProngsOn;
+	qboolean		JK2HUD = (cg_hudFiles.integer == 2 && !cg.predictedPlayerState.m_iVehicleNum && cg.predictedPlayerState.pm_type != PM_SPECTATOR);
 
 	// don't display if dead
-	if ( cg.snap->ps.stats[STAT_HEALTH] <= 0 )
+	if ( cg.predictedPlayerState.stats[STAT_HEALTH] <= 0 )
 	{
 		return;
 	}
@@ -966,16 +978,16 @@ void CG_DrawIconBackground(void)
 		return;
 	}
 
-	x2 = 30;
-	y2 = SCREEN_HEIGHT-70;
+	x2 = 30.0f;
+	y2 = SCREEN_HEIGHT-70.0f;
 
 	//JK2HUD
-	prongLeftX = x2 + 37;
-	prongRightX = SCREEN_WIDTH - (36 + x2)*cgs.widthRatioCoef;
+	prongLeftX = x2 + 37.0f;
+	prongRightX = SCREEN_WIDTH - (36.0f + x2)*cgs.widthRatioCoef;
 
 	if (inTime > wpTime)
 	{
-		if (cg_hudFiles.integer == 2 && !cg.predictedPlayerState.m_iVehicleNum) {
+		if (JK2HUD) {
 			drawType = cgs.media.inventoryIconBackground;
 			prongsOn = cgs.media.JK2inventoryProngsOn;
 		}
@@ -983,7 +995,7 @@ void CG_DrawIconBackground(void)
 	}
 	else
 	{
-		if (cg_hudFiles.integer == 2) {
+		if (JK2HUD) {
 			drawType = cgs.media.weaponIconBackground;
 			prongsOn = cgs.media.JK2weaponProngsOn;
 		}
@@ -992,7 +1004,7 @@ void CG_DrawIconBackground(void)
 
 	if (fpTime > inTime && fpTime > wpTime)
 	{
-		if (cg_hudFiles.integer == 2 && !cg.predictedPlayerState.m_iVehicleNum) {
+		if (JK2HUD) {
 			drawType = cgs.media.forceIconBackground;
 			prongsOn = cgs.media.JK2forceProngsOn;
 		}
@@ -1013,24 +1025,23 @@ void CG_DrawIconBackground(void)
 				cg.iconHUDPercent=0;
 			}
 
-			xAdd = (int) 8*cg.iconHUDPercent;
+			xAdd = 8.0f*cg.iconHUDPercent;
 
-			height = (int) (60.0f*cg.iconHUDPercent);
-			if (cg_hudFiles.integer == 2 && !cg.predictedPlayerState.m_iVehicleNum) { //background needs to be stretched by cgs.widthRatioCoef to line up with the prongs
-				CG_DrawPic( x2+60, y2+30+yOffset, 460, -height, drawType);	// Top half
-				CG_DrawPic( x2+60, y2+30-2+yOffset, 460, height, drawType);	// Bottom half
+			height = (60.0f*cg.iconHUDPercent);
+			if (JK2HUD) { //background needs to be stretched by cgs.widthRatioCoef to line up with the prongs
+				CG_DrawPic( x2+60.0f, y2+30.0f+yOffset, 460.0f, -height, drawType);	// Top half
+				CG_DrawPic( x2+60.0f, y2+30.0f-2.0f+yOffset, 460.0f, height, drawType);	// Bottom half
 			}
-
 		}
 		else
 		{
 			xAdd = 0;
 		}
 
-		if (cg_hudFiles.integer == 2 && !cg.predictedPlayerState.m_iVehicleNum) {
+		if (JK2HUD) {
 			trap->R_SetColor(hudTintColor);
-			CG_DrawPic((prongLeftX + xAdd)*cgs.widthRatioCoef, y2 - 10, 40*cgs.widthRatioCoef, 80, cgs.media.JK2weaponProngsOff);
-			CG_DrawPic(prongRightX - xAdd*cgs.widthRatioCoef, y2 - 10, -40*cgs.widthRatioCoef, 80, cgs.media.JK2weaponProngsOff);
+			CG_DrawPic((prongLeftX + xAdd)*cgs.widthRatioCoef, y2 - 10.0f, 40.0f*cgs.widthRatioCoef, 80.0f, cgs.media.JK2weaponProngsOff);
+			CG_DrawPic(prongRightX - xAdd*cgs.widthRatioCoef, y2 - 10.0f, -40.0f*cgs.widthRatioCoef, 80.0f, cgs.media.JK2weaponProngsOff);
 		}
 
 		return;
@@ -1057,11 +1068,11 @@ void CG_DrawIconBackground(void)
 		cg.iconHUDPercent=1;
 	}
 
-	if (cg_hudFiles.integer == 2 && !cg.predictedPlayerState.m_iVehicleNum) {  //background needs to be stretched by cgs.widthRatioCoef to line up with the prongs
+	if (JK2HUD) {  //background needs to be stretched by cgs.widthRatioCoef to line up with the prongs
 		trap->R_SetColor(colorTable[CT_WHITE]);
-		height = (int)(60.0f*cg.iconHUDPercent);
-		CG_DrawPic(x2 + 60, y2 + 30 + yOffset, 460, -height, drawType);	// Top half
-		CG_DrawPic(x2 + 60, y2 + 30 - 2 + yOffset, 460, height, drawType);	// Bottom half
+		height = 60.0f*cg.iconHUDPercent;
+		CG_DrawPic(x2 + 60.0f, y2 + 30.0f + yOffset, 460.0f, -height, drawType);	// Top half
+		CG_DrawPic(x2 + 60.0f, y2 + 30.0f - 2 + yOffset, 460.0f, height, drawType);	// Bottom half
 	}
 
 	// And now for the prongs
@@ -1082,11 +1093,11 @@ void CG_DrawIconBackground(void)
 	}
 */
 	// Side Prongs
-	if (cg_hudFiles.integer == 2 && !cg.predictedPlayerState.m_iVehicleNum) {
+	if (JK2HUD) {
 		trap->R_SetColor(colorTable[CT_WHITE]);
-		xAdd = (int)8 * cg.iconHUDPercent;
-		CG_DrawPic((prongLeftX + xAdd)*cgs.widthRatioCoef, y2 - 10, 40*cgs.widthRatioCoef, 80, background);
-		CG_DrawPic(prongRightX - xAdd*cgs.widthRatioCoef, y2 - 10, -40*cgs.widthRatioCoef, 80, background);
+		xAdd = 8.0f*cg.iconHUDPercent;
+		CG_DrawPic((prongLeftX + xAdd)*cgs.widthRatioCoef, y2 - 10.0f, 40.0f*cgs.widthRatioCoef, 80.0f, background);
+		CG_DrawPic(prongRightX - xAdd*cgs.widthRatioCoef, y2 - 10.0f, -40.0f*cgs.widthRatioCoef, 80.0f, background);
 	}
 
 }
@@ -1630,18 +1641,6 @@ void CG_Weapon_f( void ) {
 			return;
 		}
 
-		if (num == 2 && (cg.snap->ps.stats[STAT_WEAPONS] & (1 << WP_BRYAR_OLD)))
-		{ //hack to make pistol button equip bryar or cycle between bryar and dl-44
-			if (cg.snap->ps.weapon == WP_BRYAR_PISTOL || !(cg.snap->ps.stats[STAT_WEAPONS] & (1 << WP_BRYAR_PISTOL)))
-			{
-				num = WP_BRYAR_OLD - 2;
-			}
-			else if (cg.snap->ps.weapon == WP_BRYAR_OLD)
-			{
-				num = WP_BRYAR_PISTOL - 2;
-			}
-		}
-
 		//rww - hack to make weapon numbers same as single player
 		if (num > WP_STUN_BATON)
 		{
@@ -1658,6 +1657,28 @@ void CG_Weapon_f( void ) {
 			{
 				num = WP_MELEE;
 			}
+		}
+
+		if (num == WP_BRYAR_PISTOL)
+		{
+			if (!(cg.snap->ps.stats[STAT_WEAPONS] & (1<<WP_BRYAR_PISTOL)) && !(cg.snap->ps.stats[STAT_WEAPONS] & (1<<WP_BRYAR_OLD)))
+			{ //can't use either pistol
+				if ((cg.snap->ps.stats[STAT_WEAPONS] & (1<<WP_MELEE)))//switch to melee
+					num = WP_MELEE;
+				else if (cg.snap->ps.stats[STAT_WEAPONS] & (1<<WP_STUN_BATON)) //switch to stun baton if melee isnt available
+					num = WP_STUN_BATON;
+			}
+			else if (cg.snap->ps.stats[STAT_WEAPONS] & (1 << WP_BRYAR_OLD))
+			{//hack to make pistol button equip bryar or cycle between bryar and dl-44
+				if (cg.snap->ps.weapon == WP_BRYAR_PISTOL || !(cg.snap->ps.stats[STAT_WEAPONS] & (1 << WP_BRYAR_PISTOL)))
+					num = WP_BRYAR_OLD;
+				else if (cg.snap->ps.weapon == WP_BRYAR_OLD)
+					num = WP_BRYAR_PISTOL;
+			}
+		}
+		else if (num == WP_BLASTER && !(cg.snap->ps.stats[STAT_WEAPONS] & (1<<WP_BLASTER)) && (cg.snap->ps.stats[STAT_WEAPONS] & (1<<WP_STUN_BATON)))
+		{ //switch to stun baton if E-11 is not available..
+			num = WP_STUN_BATON;
 		}
 
 		if (num > LAST_USEABLE_WEAPON+1)
@@ -2183,7 +2204,7 @@ void CG_FireWeapon( centity_t *cent, qboolean altFire ) {
 		return;
 	}
 
-	if ((cg.predictedPlayerState.clientNum == cent->currentState.number) && cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE] && (ent->weapon != WP_ROCKET_LAUNCHER))
+	if ((cg.predictedPlayerState.clientNum == cent->currentState.number) && cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE] && (ent->weapon != WP_ROCKET_LAUNCHER))
 		return;
 
 	weap = &cg_weapons[ ent->weapon ];
@@ -2301,7 +2322,7 @@ void CG_FireWeapon( centity_t *cent, qboolean altFire ) {
 		}
 	}
 //unlagged - attack prediction #1
-	if (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_UNLAGGEDHITSCAN && cent->currentState.number == cg.predictedPlayerState.clientNum)//why not eventparm, or ownernum .. memes
+	if (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_UNLAGGEDHITSCAN && cent->currentState.number == cg.predictedPlayerState.clientNum)//why not eventparm, or ownernum .. memes
 	{
 		VectorCopy( cg.predictedPlayerState.origin, muzzlePoint );
 		muzzlePoint[2] += cg.predictedPlayerState.viewheight;
@@ -2348,7 +2369,7 @@ void CG_FireWeapon( centity_t *cent, qboolean altFire ) {
 		}
 		else if (ent->weapon == WP_STUN_BATON)
 		{
-			if (altFire && cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_SHOCKLANCE)
+			if (altFire && cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_SHOCKLANCE)
 			{
 				VectorMA( muzzlePoint, 256, forward, endPoint );//loda
 
@@ -2364,7 +2385,7 @@ void CG_FireWeapon( centity_t *cent, qboolean altFire ) {
 				//Com_Printf( "Predicted shocklance fire\n" );
 				FX_DisruptorMainShot( muzzlePoint, trace.endpos );
 			}
-			else if (!altFire && cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_LG)
+			else if (!altFire && cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_LG)
 			{
 				VectorMA( muzzlePoint, 640, forward, endPoint );
 
@@ -2385,7 +2406,7 @@ void CG_FireWeapon( centity_t *cent, qboolean altFire ) {
 	}//end hitscan prediction
 
 	//why not eventparm, memes
-	if (cg_simulatedProjectiles.integer && (cent->currentState.number == cg.predictedPlayerState.clientNum) && cgs.isJAPro && (cgs.jcinfo & JAPRO_CINFO_UNLAGGEDPROJ)) {//sad hack for 1st person only for now..
+	if (cg_simulatedProjectiles.integer && (cent->currentState.number == cg.predictedPlayerState.clientNum) && cgs.serverMod == SVMOD_JAPRO && (cgs.jcinfo & JAPRO_CINFO_UNLAGGEDPROJ)) {//sad hack for 1st person only for now..
 			CG_LocalMissile(cent, ent->weapon, altFire);//at this point we know its a bullet? or a saber? or vehicle attack? 
 	}
 

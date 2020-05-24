@@ -175,7 +175,7 @@ XCVAR_DEF( pmove_msec,					"8",			NULL,				CVAR_SYSTEMINFO|CVAR_ARCHIVE,					qtr
 XCVAR_DEF( RMG,							"0",			NULL,				CVAR_NONE,										qtrue )
 XCVAR_DEF( sv_cheats,					"1",			NULL,				CVAR_NONE,										qfalse )
 XCVAR_DEF( sv_fps,						"40",			NULL,				CVAR_ARCHIVE|CVAR_SERVERINFO,					qtrue )
-XCVAR_DEF( sv_maxRate,					"7000",			NULL,				CVAR_ARCHIVE|CVAR_SERVERINFO,					qtrue )
+XCVAR_DEF( sv_maxRate,					"90000",		NULL,				CVAR_ARCHIVE|CVAR_SERVERINFO,					qtrue )
 XCVAR_DEF( sv_maxclients,				"8",			NULL,				CVAR_SERVERINFO|CVAR_LATCH|CVAR_ARCHIVE,		qfalse )
 XCVAR_DEF( timelimit,					"0",			NULL,				CVAR_SERVERINFO|CVAR_ARCHIVE|CVAR_NORESTART,	qtrue )
 
@@ -185,6 +185,7 @@ XCVAR_DEF( g_fixFlagSuicide,			"0",			NULL,				CVAR_ARCHIVE,									qtrue )
 XCVAR_DEF( g_allowFlagThrow,			"0",			NULL,				CVAR_ARCHIVE,									qtrue )
 XCVAR_DEF( g_fixCTFScores,				"0",			NULL,				CVAR_ARCHIVE,									qtrue )
 XCVAR_DEF( g_fixFlagHitbox,				"0",			NULL,				CVAR_ARCHIVE,									qtrue )
+XCVAR_DEF( g_fixExplosiveHitboxes,		"1",			NULL,				CVAR_ARCHIVE,									qtrue ) //fixes hitboxes on placed explosives (tripmines/detpacks)
 XCVAR_DEF( g_rabbit,					"0",			CVU_Rabbit,			CVAR_ARCHIVE,									qtrue )
 
 //JAPRO Saber
@@ -315,7 +316,7 @@ XCVAR_DEF( g_allowRaceTele,				"0",			NULL,				CVAR_ARCHIVE,									qtrue )
 XCVAR_DEF( g_allowRegistration,			"1",			CVU_Registration,	CVAR_ARCHIVE,									qtrue )
 XCVAR_DEF( sv_pluginKey,				"0",			NULL,				CVAR_ARCHIVE,									qfalse )
 XCVAR_DEF( g_forceLogin,				"0",			NULL,				CVAR_ARCHIVE,									qfalse )
-XCVAR_DEF( g_validateCosmetics,			"1",			NULL,				CVAR_ARCHIVE,									qtrue )
+XCVAR_DEF( g_validateCosmetics,			"1",			CVU_Cosmetics,		CVAR_ARCHIVE,									qtrue )
 //XCVAR_DEF( sv_globalDBPath,			"",				NULL,				CVAR_ARCHIVE|CVAR_LATCH,						qfalse )
 //XCVAR_DEF( sv_webServerPath,			"",				NULL,				CVAR_ARCHIVE|CVAR_LATCH,						qfalse )
 //XCVAR_DEF( sv_webServerPassword,		"",				NULL,				CVAR_ARCHIVE,									qfalse )
@@ -341,6 +342,7 @@ XCVAR_DEF( bot_s3,						"48",			NULL,				CVAR_ARCHIVE,									qtrue )
 XCVAR_DEF( bot_s4,						"0.5",			NULL,				CVAR_ARCHIVE,									qtrue )
 XCVAR_DEF( bot_s5,						"0",			NULL,				CVAR_ARCHIVE,									qtrue )
 XCVAR_DEF( bot_s6,						"64",			NULL,				CVAR_ARCHIVE,									qtrue )
+XCVAR_DEF( g_fixTimerOOB,				"0",			NULL,				CVAR_ARCHIVE,									qtrue )
 
 
 //DEBUG / TOOLS

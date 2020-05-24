@@ -94,45 +94,6 @@ qboolean CG_NoUseableForce(void)
 	return qtrue;
 }
 
-//chatlogs
-void QDECL CG_LogPrintf( fileHandle_t fileHandle, const char *fmt, ... ) {
-	va_list argptr;
-	char string[1024] = { 0 };
-	size_t len;
-
-	if (cg.demoPlayback)
-		return;
-
-	if (cg_logChat.integer & JAPRO_CHATLOG_OLDTIMESTAMP) {
-		int msec = cg.time - cgs.levelStartTime;
-		int secs = msec / 1000;
-		int mins = secs / 60;
-		secs %= 60;
-		msec %= 1000;
-
-		Com_sprintf(string, sizeof(string), "%i:%02i ", mins, secs);
-	}
-	else {
-		time_t rawtime;
-		time(&rawtime);
-		strftime(string, sizeof(string), "[%Y-%m-%d] [%H:%M:%S] ", localtime(&rawtime));
-	}
-
-	len = strlen(string);
-
-	va_start(argptr, fmt);
-	Q_vsnprintf(string + len, sizeof(string) - len, fmt, argptr);
-	va_end(argptr);
-
-	if (!fileHandle)
-		return;
-
-	Q_StripColor(string);//Todo, html colors?
-
-	trap->FS_Write(string, strlen(string), fileHandle);
-}
-//
-
 static int C_PointContents( void ) {
 	TCGPointContents *data = &cg.sharedBuffer.pointContents;
 	return CG_PointContents( data->mPoint, data->mPassEntityNum );
@@ -573,6 +534,14 @@ void CG_ParseWeatherEffect(const char *str)
 {
 	char *sptr = (char *)str;
 	sptr++; //pass the '*'
+
+	if (Q_stricmpn(sptr, "die", 3) && Q_stricmpn(sptr, "clear", 5) && Q_stricmpn(sptr, "freeze", 6)
+	&& Q_stricmpn(sptr, "zone", 4) && Q_stricmpn(sptr, "acidrain", 8) && Q_stricmpn(sptr, "spacedust", 9)
+	&& Q_stricmpn(sptr, "sand", 4) && Q_stricmpn(sptr, "outsideshake", 12) && Q_stricmpn(sptr, "outsidepain", 11))
+	{ //should come with a better way to detect this...
+		cg.coldBreathEffects = qtrue;
+	}
+
 	trap->R_WorldEffectCommand(sptr);
 }
 
@@ -731,7 +700,7 @@ static void CG_RegisterSounds( void ) {
 
 	cgs.media.rivetMarkShader			= trap->R_RegisterShader( "gfx/damage/rivetmark" );
 
-	trap->R_RegisterShader( "gfx/effects/saberFlare" );
+	cgs.media.saberClashFlare			= trap->R_RegisterShader( "gfx/effects/saberFlare" );
 
 	trap->R_RegisterShader( "powerups/ysalimarishell" );
 
@@ -762,7 +731,14 @@ static void CG_RegisterSounds( void ) {
 	trap->S_RegisterSound( "sound/weapons/saber/enemy_saber_on.wav" );
 	trap->S_RegisterSound( "sound/weapons/saber/enemy_saber_off.wav" );
 
-	trap->S_RegisterSound( "sound/weapons/saber/saberhum1.wav" );
+	for (i = 0; i < 5; i++) {//JAPRO - Clientside - Use all saber hum sounds found in base assets
+		cgs.media.saberHumSounds[i] = trap->S_RegisterSound(va("sound/weapons/saber/saberhum%i.wav", i + 1));
+		if (!cgs.media.saberHumSounds[i]) {
+			Com_Printf(S_COLOR_RED "Failed to register sound \"sound/weapons/saber/saberhum%i.wav\"\n", i + 1);
+			cgs.media.saberHumSounds[i] = trap->S_RegisterSound("sound/weapons/saber/saberhum4.wav"); //fallback to default
+		}
+	}
+
 	trap->S_RegisterSound( "sound/weapons/saber/saberon.wav" );
 	trap->S_RegisterSound( "sound/weapons/saber/saberoffquick.wav" );
 	trap->S_RegisterSound( "sound/weapons/saber/saberhitwall1" );
@@ -822,7 +798,7 @@ static void CG_RegisterSounds( void ) {
 	trap->S_RegisterSound("sound/weapons/force/jump.mp3"); //PDSOUND_FORCEJUMP
 	trap->S_RegisterSound("sound/weapons/force/grip.mp3"); //PDSOUND_FORCEGRIP
 
-	if ( cgs.gametype >= GT_TEAM || com_buildScript.integer ) {
+	if ( cgs.serverMod == SVMOD_JAPRO || cgs.gametype >= GT_TEAM || com_buildScript.integer ) {
 
 #ifdef JK2AWARDS
 		cgs.media.captureAwardSound = trap->S_RegisterSound("sound/chars/protocol/misc/capture.wav");
@@ -834,13 +810,13 @@ static void CG_RegisterSounds( void ) {
 		cgs.media.redScoredSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM044");
 		cgs.media.blueScoredSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM043" );
 
-		if ( cgs.gametype == GT_CTF || com_buildScript.integer ) {
+		if ( cgs.serverMod == SVMOD_JAPRO || cgs.gametype == GT_CTF || com_buildScript.integer ) {
 			cgs.media.redFlagReturnedSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM042" );
 			cgs.media.blueFlagReturnedSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM041" );
 			cgs.media.redTookFlagSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM040" );
 			cgs.media.blueTookFlagSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM039" );
 		}
-		if ( cgs.gametype == GT_CTY /*|| com_buildScript.integer*/ ) {
+		if ( cgs.serverMod == SVMOD_JAPRO || cgs.gametype == GT_CTY /*|| com_buildScript.integer*/ ) {
 			cgs.media.redYsalReturnedSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM050" );
 			cgs.media.blueYsalReturnedSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM049" );
 			cgs.media.redTookYsalSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM048" );
@@ -874,6 +850,20 @@ static void CG_RegisterSounds( void ) {
 	cgs.media.fallSound = trap->S_RegisterSound( "sound/player/fallsplat.wav");
 
 	cgs.media.crackleSound = trap->S_RegisterSound( "sound/effects/energy_crackle.wav" );
+
+//JAPRO - Clientside - Hitsounds Start
+	cgs.media.hitSound			= trap->S_RegisterSound( "sound/effects/hitsound.wav" ); 
+	cgs.media.hitSound2			= trap->S_RegisterSound( "sound/effects/hitsound2.wav" );
+	cgs.media.hitSound3			= trap->S_RegisterSound( "sound/effects/hitsound3.wav" );
+	cgs.media.hitSound4			= trap->S_RegisterSound( "sound/effects/hitsound4.wav" );
+	cgs.media.hitTeamSound		= trap->S_RegisterSound( "sound/effects/hitsoundteam.wav" );
+
+	cgs.media.gibSound			= trap->S_RegisterSound( "sound/player/gibsplt1.wav" );
+	cgs.media.gibBounce1Sound	= trap->S_RegisterSound( "sound/player/gibimp1.wav" );
+	cgs.media.gibBounce2Sound	= trap->S_RegisterSound( "sound/player/gibimp2.wav" );
+	cgs.media.gibBounce3Sound	= trap->S_RegisterSound( "sound/player/gibimp3.wav" );
+//JAPRO - Clientside - Hitsounds End
+
 #ifdef JK2AWARDS
 	cgs.media.firstImpressiveSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM025" );
 	cgs.media.impressiveSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM025" );
@@ -931,19 +921,6 @@ static void CG_RegisterSounds( void ) {
 	cgs.media.zoomStart = trap->S_RegisterSound( "sound/interface/zoomstart.wav" );
 	cgs.media.zoomLoop	= trap->S_RegisterSound( "sound/interface/zoomloop.wav" );
 	cgs.media.zoomEnd	= trap->S_RegisterSound( "sound/interface/zoomend.wav" );
-
-//JAPRO - Clientside - Hitsounds Start
-	cgs.media.hitSound	= trap->S_RegisterSound( "sound/effects/hitsound.wav" ); 
-	cgs.media.hitSound2	= trap->S_RegisterSound( "sound/effects/hitsound2.wav" );
-	cgs.media.hitSound3	= trap->S_RegisterSound( "sound/effects/hitsound3.wav" );
-	cgs.media.hitSound4	= trap->S_RegisterSound( "sound/effects/hitsound4.wav" );
-	cgs.media.hitTeamSound	= trap->S_RegisterSound( "sound/effects/hitsoundteam.wav" );
-
-	cgs.media.gibSound = trap->S_RegisterSound( "sound/player/gibsplt1.wav" );
-	cgs.media.gibBounce1Sound = trap->S_RegisterSound( "sound/player/gibimp1.wav" );
-	cgs.media.gibBounce2Sound = trap->S_RegisterSound( "sound/player/gibimp2.wav" );
-	cgs.media.gibBounce3Sound = trap->S_RegisterSound( "sound/player/gibimp3.wav" );
-//JAPRO - Clientside - Hitsounds End
 
 	for (i=0 ; i<4 ; i++) {
 		Com_sprintf (name, sizeof(name), "sound/player/footsteps/stone_step%i.wav", i+1);
@@ -1100,7 +1077,7 @@ static void CG_RegisterSounds( void ) {
 	cgs.media.winnerSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM006" );
 	cgs.media.loserSound = trap->S_RegisterSound( "sound/chars/protocol/misc/40MOM010" );
 
-	if (cgs.isJAPro || cgs.isBaseEnhanced) {
+	if (cgs.serverMod == SVMOD_JAPRO || cgs.serverMod == SVMOD_BASEENHANCED) {
 		const char	*s;
 		char		soundName[1024];
 		for (i = 0; i < MAX_CUSTOM_VGS_SOUNDS; i++) {
@@ -1321,21 +1298,25 @@ static void CG_RegisterGraphics( void ) {
 
 	cgs.effects.mDisruptorDeathSmoke = trap->FX_RegisterEffect("disruptor/death_smoke");
 
-	if (cgs.isJAPro) {
 #if _GRAPPLE
+	if (cgs.serverMod >= SVMOD_JAPLUS) {
 		cgs.effects.grappleHitWall = trap->FX_RegisterEffect("effects/grapple/hit_wall.efx");
 		cgs.effects.grappleHitWall = trap->FX_RegisterEffect("effects/grapple/hit_player.efx");
 		cgs.media.grappleModel = trap->R_RegisterModel( "models/items/grapple.md3" );//Grapple model
-#endif
 	}
+#endif
+
+	//breathing efx from SP
+	cgs.effects.breath = trap->FX_RegisterEffect("effects/misc/breath.efx");
+	cgs.effects.waterBreath = trap->FX_RegisterEffect("effects/misc/waterbreath.efx");
 
 	for ( i = 1 ; i < NUM_CROSSHAIRS-1 ; i++ ) { //1 to 8 instead of 0 to 9
 		cgs.media.crosshairShader[i] = trap->R_RegisterShaderNoMip( va("gfx/2d/crosshair%c", 'a'+i) );
 	}
+
 	//Swap A and J since we want crosshairA (dot) to work on old modcode. 1=B, 2=C, 3=D, 4=E, 5=F, 6=G, 7=H, 8=I, 9=A, 10=J.
 	cgs.media.crosshairShader[NUM_CROSSHAIRS-1] = trap->R_RegisterShaderNoMip( va("gfx/2d/crosshair%c", 'a'+0) ); //9=A
 	cgs.media.crosshairShader[0] = trap->R_RegisterShaderNoMip( va("gfx/2d/crosshair%c", 'a'+9) ); //10=J
-
 
 	cg.loadLCARSStage = 4;
 
@@ -1367,7 +1348,7 @@ static void CG_RegisterGraphics( void ) {
 		}
 	}
 
-	if ( cgs.gametype == GT_CTF || cgs.gametype == GT_CTY || com_buildScript.integer ) {
+	if ( cgs.serverMod == SVMOD_JAPRO || cgs.gametype == GT_CTF || cgs.gametype == GT_CTY || com_buildScript.integer ) {
 		if (com_buildScript.integer)
 		{
 			trap->R_RegisterModel( "models/flags/r_flag.md3" );
@@ -1376,7 +1357,7 @@ static void CG_RegisterGraphics( void ) {
 			trap->R_RegisterModel( "models/flags/b_flag_ysal.md3" );
 		}
 
-		if (cgs.gametype == GT_CTF)
+		if (cgs.gametype == GT_CTF || cgs.serverMod == SVMOD_JAPRO) //for dynamic gametype switchin
 		{
 			cgs.media.redFlagModel = trap->R_RegisterModel( "models/flags/r_flag.md3" );
 			cgs.media.blueFlagModel = trap->R_RegisterModel( "models/flags/b_flag.md3" );
@@ -1398,12 +1379,13 @@ static void CG_RegisterGraphics( void ) {
 
 		trap->R_RegisterShaderNoMip("gfx/2d/net.tga");
 	}
-	else if ( (cgs.gametype == GT_FFA || cgs.gametype == GT_TEAM ) && cgs.isJAPro )//loda
+
+	if ( cgs.serverMod == SVMOD_JAPRO && ( cgs.gametype == GT_FFA || cgs.gametype == GT_TEAM ) )//loda
 	{
 		cgs.media.neutralFlagModel = trap->R_RegisterModel( "models/flags/n_flag.md3" );
 	}
 
-	if ( cgs.gametype >= GT_TEAM || com_buildScript.integer ) {
+	if ( cgs.serverMod == SVMOD_JAPRO || cgs.gametype >= GT_TEAM || com_buildScript.integer ) {
 		cgs.media.teamRedShader = trap->R_RegisterShader( "sprites/team_red" );
 		cgs.media.teamBlueShader = trap->R_RegisterShader( "sprites/team_blue" );
 		//cgs.media.redQuadShader = trap->R_RegisterShader("powerups/blueflag" );
@@ -1509,37 +1491,6 @@ static void CG_RegisterGraphics( void ) {
 	cgs.media.glassChunkSound		= trap->S_RegisterSound("sound/weapons/explosions/glassbreak1");
 	cgs.media.crateBreakSound[0]	= trap->S_RegisterSound("sound/weapons/explosions/crateBust1" );
 	cgs.media.crateBreakSound[1]	= trap->S_RegisterSound("sound/weapons/explosions/crateBust2" );
-
-//JAPRO - Clientside - Movement Keys - Start
-	cgs.media.keyCrouchOffShader	= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/crouch_off" );
-	cgs.media.keyCrouchOnShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/crouch_on" );
-	cgs.media.keyJumpOffShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/jump_off" );
-	cgs.media.keyJumpOnShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/jump_on" );
-	cgs.media.keyBackOffShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/back_off" );
-	cgs.media.keyBackOnShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/back_on" );
-	cgs.media.keyForwardOffShader	= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/forward_off" );
-	cgs.media.keyForwardOnShader	= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/forward_on" );
-	cgs.media.keyLeftOffShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/left_off" );
-	cgs.media.keyLeftOnShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/left_on" );
-	cgs.media.keyRightOffShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/right_off" );
-	cgs.media.keyRightOnShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/right_on" );
-//JAPRO - Clientside - Movement Keys - End
-	cgs.media.bloodExplosionShader = trap->R_RegisterShader( "bloodExplosion" );//JAPRO - Clientside - re add cg_blood
-	cgs.media.leadIndicator		= trap->R_RegisterShader( "gfx/menus/radar/lead" );//JAPRO - Clientside - re add cg_blood
-
-	//japro gibs
-	cgs.media.gibAbdomen = trap->R_RegisterModel( "models/gibs/abdomen.md3" );
-	cgs.media.gibArm = trap->R_RegisterModel( "models/gibs/arm.md3" );
-	cgs.media.gibChest = trap->R_RegisterModel( "models/gibs/chest.md3" );
-	cgs.media.gibFist = trap->R_RegisterModel( "models/gibs/fist.md3" );
-	cgs.media.gibFoot = trap->R_RegisterModel( "models/gibs/foot.md3" );
-	cgs.media.gibForearm = trap->R_RegisterModel( "models/gibs/forearm.md3" );
-	cgs.media.gibIntestine = trap->R_RegisterModel( "models/gibs/intestine.md3" );
-	cgs.media.gibLeg = trap->R_RegisterModel( "models/gibs/leg.md3" );
-	cgs.media.gibSkull = trap->R_RegisterModel( "models/gibs/skull.md3" );
-	cgs.media.gibBrain = trap->R_RegisterModel( "models/gibs/brain.md3" );
-
-	cgs.media.bloodTrailShader = trap->R_RegisterShader( "bloodTrail" );
 	//
 
 /*
@@ -1578,17 +1529,62 @@ Ghoul2 Insert End
 
 	cgs.media.cloakedShader					= trap->R_RegisterShader( "gfx/effects/cloakedShader" );
 
-	cgs.media.raceShader = trap->R_RegisterShader("gfx/effects/raceShader");//japro
-	cgs.media.duelShader = trap->R_RegisterShader("gfx/effects/duelShader");//japro
-
 	// wall marks
 	cgs.media.shadowMarkShader	= trap->R_RegisterShader( "markShadow" );
 	cgs.media.wakeMarkShader	= trap->R_RegisterShader( "wake" );
-	cgs.media.bloodMarkShader = trap->R_RegisterShader( "bloodMark" );
 
 	cgs.media.viewPainShader					= trap->R_RegisterShader( "gfx/misc/borgeyeflare" );
 	cgs.media.viewPainShader_Shields			= trap->R_RegisterShader( "gfx/mp/dmgshader_shields" );
 	cgs.media.viewPainShader_ShieldsAndHealth	= trap->R_RegisterShader( "gfx/mp/dmgshader_shieldsandhealth" );
+
+	//jaPRO mod assets - start
+	//Movement Keys - Start
+	cgs.media.keyCrouchOffShader	= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/crouch_off" );
+	cgs.media.keyCrouchOnShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/crouch_on" );
+	cgs.media.keyJumpOffShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/jump_off" );
+	cgs.media.keyJumpOnShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/jump_on" );
+	cgs.media.keyBackOffShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/back_off" );
+	cgs.media.keyBackOnShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/back_on" );
+	cgs.media.keyForwardOffShader	= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/forward_off" );
+	cgs.media.keyForwardOnShader	= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/forward_on" );
+	cgs.media.keyLeftOffShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/left_off" );
+	cgs.media.keyLeftOnShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/left_on" );
+	cgs.media.keyRightOffShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/right_off" );
+	cgs.media.keyRightOnShader		= trap->R_RegisterShaderNoMip ( "gfx/hud/keys/right_on" );
+	//Movement Keys - End
+
+	//japro gibs
+	cgs.media.bloodExplosionShader	= trap->R_RegisterShader( "bloodExplosion" );//JAPRO - Clientside - re add cg_blood
+	cgs.media.leadIndicator			= trap->R_RegisterShader( "gfx/menus/radar/lead" );//JAPRO - Clientside - re add cg_blood
+	cgs.media.gibAbdomen			= trap->R_RegisterModel( "models/gibs/abdomen.md3" );
+	cgs.media.gibArm				= trap->R_RegisterModel( "models/gibs/arm.md3" );
+	cgs.media.gibChest				= trap->R_RegisterModel( "models/gibs/chest.md3" );
+	cgs.media.gibFist				= trap->R_RegisterModel( "models/gibs/fist.md3" );
+	cgs.media.gibFoot				= trap->R_RegisterModel( "models/gibs/foot.md3" );
+	cgs.media.gibForearm			= trap->R_RegisterModel( "models/gibs/forearm.md3" );
+	cgs.media.gibIntestine			= trap->R_RegisterModel( "models/gibs/intestine.md3" );
+	cgs.media.gibLeg				= trap->R_RegisterModel( "models/gibs/leg.md3" );
+	cgs.media.gibSkull				= trap->R_RegisterModel( "models/gibs/skull.md3" );
+	cgs.media.gibBrain				= trap->R_RegisterModel( "models/gibs/brain.md3" );
+	cgs.media.bloodTrailShader		= trap->R_RegisterShader( "bloodTrail" );
+	cgs.media.bloodMarkShader		= trap->R_RegisterShader( "bloodMark" );
+
+
+	//duel/race shaders
+	cgs.media.raceShader			= trap->R_RegisterShader("gfx/effects/raceShader");//japro
+	cgs.media.duelShader			= trap->R_RegisterShader("gfx/effects/duelShader");//japro
+
+	//cosmetics
+	if (cgs.serverMod != SVMOD_JAPLUS && cgs.serverMod != SVMOD_BASEJKA) {
+		cgs.media.cosmetics.santaHat	= trap->R_RegisterModel("models/players/hats/santahat.md3");
+		cgs.media.cosmetics.pumpkin		= trap->R_RegisterModel("models/players/hats/pumpkin.md3");
+		cgs.media.cosmetics.cap			= trap->R_RegisterModel("models/players/hats/cap.md3");
+		cgs.media.cosmetics.fedora		= trap->R_RegisterModel("models/players/hats/fedora.md3");
+		cgs.media.cosmetics.kringekap	= trap->R_RegisterModel("models/players/hats/cringe.md3");
+		cgs.media.cosmetics.sombrero	= trap->R_RegisterModel("models/players/hats/sombrero.md3");
+		cgs.media.cosmetics.tophat		= trap->R_RegisterModel("models/players/hats/tophat.md3");
+	}
+	//jaPRO mod assets - end
 
 	// register the inline models
 	breakPoint = cgs.numInlineModels = trap->CM_NumInlineModels();
@@ -2387,7 +2383,7 @@ void CG_LoadMenus(const char *menuFile)
 
 	if ( !f )
 	{
-		if (!(Q_isanumber(menuFile) && (cg_hudFiles.integer >= 0 && cg_hudFiles.integer <= 3))) { //don't show any message when using cg_hudFiles
+		if ( !cgs.newHud ) { //don't show any message when using cg_hudFiles
 			if ( Q_isanumber( menuFile ) )
 				trap->Print( S_COLOR_GREEN "hud menu file skipped, using default\n" );
 			else
@@ -2395,7 +2391,7 @@ void CG_LoadMenus(const char *menuFile)
 		}
 
 		len = trap->FS_Open( "ui/jahud.txt", &f, FS_READ );
-		if (!f)
+		if ( !f )
 		{
 			trap->Error( ERR_DROP, S_COLOR_RED "default hud menu file not found: ui/jahud.txt, unable to continue!" );
 		}
@@ -2445,20 +2441,20 @@ void CG_LoadMenus(const char *menuFile)
 
 /*
 =================
-CG_LoadHudMenu();
+CG_InitDisplayContext
 
 =================
 */
-void CG_LoadHudMenu()
+static void CG_InitDisplayContext(void)
 {
-	const char *hudSet;
+	memset(&cgDC, 0, sizeof(cgDC));
 
 	cgDC.registerShaderNoMip			= trap->R_RegisterShaderNoMip;
 	cgDC.setColor						= trap->R_SetColor;
 	cgDC.drawHandlePic					= &CG_DrawPic;
 	cgDC.drawStretchPic					= trap->R_DrawStretchPic;
 	cgDC.drawText						= &CG_Text_Paint;
-	cgDC.textWidth						= &CG_Text_Width;
+	cgDC.textWidth						= &CG_Text_WidthInt;
 	cgDC.textHeight						= &CG_Text_Height;
 	cgDC.registerModel					= trap->R_RegisterModel;
 	cgDC.modelBounds					= trap->R_ModelBounds;
@@ -2511,49 +2507,57 @@ void CG_LoadHudMenu()
 	cgDC.drawCinematic					= &CG_DrawCinematic;
 	cgDC.runCinematicFrame				= &CG_RunCinematicFrame;
 	cgDC.ext.Font_StrLenPixels			= trap->ext.R_Font_StrLenPixels;
+}
 
+/*
+=================
+CG_LoadHudMenu
+
+=================
+*/
+void CG_LoadHudMenu(void)
+{
+	const char *hudSet;
 
 	Init_Display(&cgDC);
-
 	Menu_Reset();
 
-	if (cg_hudFiles.integer > 2) {
+	if ( cgs.newHud && cg_hudFiles.integer == 3 ) {
 		hudSet = "ui/elegance_hud.txt";
 	}
 	else {
 		hudSet = cg_hudFiles.string;
-		if (hudSet[0] == '\0')
+		if ( !VALIDSTRING(hudSet) )
 		{
 			hudSet = "ui/jahud.txt";
 		}
 	}
 
 	CG_LoadMenus(hudSet);
-
 }
 
-void CG_AssetCache() {
+void CG_AssetCache(void) {
 	//if (Assets.textFont == NULL) {
 	//  trap->R_RegisterFont("fonts/arial.ttf", 72, &Assets.textFont);
 	//}
 	//Com_Printf("Menu Size: %i bytes\n", sizeof(Menus));
-	cgDC.Assets.gradientBar = trap->R_RegisterShaderNoMip( ASSET_GRADIENTBAR );
-	cgDC.Assets.fxBasePic = trap->R_RegisterShaderNoMip( ART_FX_BASE );
-	cgDC.Assets.fxPic[0] = trap->R_RegisterShaderNoMip( ART_FX_RED );
-	cgDC.Assets.fxPic[1] = trap->R_RegisterShaderNoMip( ART_FX_YELLOW );
-	cgDC.Assets.fxPic[2] = trap->R_RegisterShaderNoMip( ART_FX_GREEN );
-	cgDC.Assets.fxPic[3] = trap->R_RegisterShaderNoMip( ART_FX_TEAL );
-	cgDC.Assets.fxPic[4] = trap->R_RegisterShaderNoMip( ART_FX_BLUE );
-	cgDC.Assets.fxPic[5] = trap->R_RegisterShaderNoMip( ART_FX_CYAN );
-	cgDC.Assets.fxPic[6] = trap->R_RegisterShaderNoMip( ART_FX_WHITE );
-	cgDC.Assets.scrollBar = trap->R_RegisterShaderNoMip( ASSET_SCROLLBAR );
-	cgDC.Assets.scrollBarArrowDown = trap->R_RegisterShaderNoMip( ASSET_SCROLLBAR_ARROWDOWN );
-	cgDC.Assets.scrollBarArrowUp = trap->R_RegisterShaderNoMip( ASSET_SCROLLBAR_ARROWUP );
-	cgDC.Assets.scrollBarArrowLeft = trap->R_RegisterShaderNoMip( ASSET_SCROLLBAR_ARROWLEFT );
-	cgDC.Assets.scrollBarArrowRight = trap->R_RegisterShaderNoMip( ASSET_SCROLLBAR_ARROWRIGHT );
-	cgDC.Assets.scrollBarThumb = trap->R_RegisterShaderNoMip( ASSET_SCROLL_THUMB );
-	cgDC.Assets.sliderBar = trap->R_RegisterShaderNoMip( ASSET_SLIDER_BAR );
-	cgDC.Assets.sliderThumb = trap->R_RegisterShaderNoMip( ASSET_SLIDER_THUMB );
+	cgDC.Assets.gradientBar = cgDC.registerShaderNoMip( ASSET_GRADIENTBAR );
+	cgDC.Assets.fxBasePic = cgDC.registerShaderNoMip( ART_FX_BASE );
+	cgDC.Assets.fxPic[0] = cgDC.registerShaderNoMip( ART_FX_RED );
+	cgDC.Assets.fxPic[1] = cgDC.registerShaderNoMip( ART_FX_YELLOW );
+	cgDC.Assets.fxPic[2] = cgDC.registerShaderNoMip( ART_FX_GREEN );
+	cgDC.Assets.fxPic[3] = cgDC.registerShaderNoMip( ART_FX_TEAL );
+	cgDC.Assets.fxPic[4] = cgDC.registerShaderNoMip( ART_FX_BLUE );
+	cgDC.Assets.fxPic[5] = cgDC.registerShaderNoMip( ART_FX_CYAN );
+	cgDC.Assets.fxPic[6] = cgDC.registerShaderNoMip( ART_FX_WHITE );
+	cgDC.Assets.scrollBar = cgDC.registerShaderNoMip( ASSET_SCROLLBAR );
+	cgDC.Assets.scrollBarArrowDown = cgDC.registerShaderNoMip( ASSET_SCROLLBAR_ARROWDOWN );
+	cgDC.Assets.scrollBarArrowUp = cgDC.registerShaderNoMip( ASSET_SCROLLBAR_ARROWUP );
+	cgDC.Assets.scrollBarArrowLeft = cgDC.registerShaderNoMip( ASSET_SCROLLBAR_ARROWLEFT );
+	cgDC.Assets.scrollBarArrowRight = cgDC.registerShaderNoMip( ASSET_SCROLLBAR_ARROWRIGHT );
+	cgDC.Assets.scrollBarThumb = cgDC.registerShaderNoMip( ASSET_SCROLL_THUMB );
+	cgDC.Assets.sliderBar = cgDC.registerShaderNoMip( ASSET_SLIDER_BAR );
+	cgDC.Assets.sliderThumb = cgDC.registerShaderNoMip( ASSET_SLIDER_THUMB );
 }
 
 
@@ -2611,12 +2615,56 @@ void WP_SaberLoadParms( void );
 void BG_VehicleLoadParms( void );
 
 //chatlog
+void QDECL CG_LogPrintf( fileHandle_t fileHandle, const char *fmt, ... ) {
+	va_list argptr;
+	char string[1024] = { 0 };
+	size_t len;
+
+	if (cg.demoPlayback)
+		return;
+
+	if (!cg.log.started) {
+		cg.log.started = qtrue;
+		CG_LogPrintf(fileHandle, "Start log\n--------------------------------------------------------------\n\n");
+	}
+
+	if (cg_logChat.integer & JAPRO_CHATLOG_OLDTIMESTAMP) {
+		int msec = cg.time - cgs.levelStartTime;
+		int secs = msec / 1000;
+		int mins = secs / 60;
+		secs %= 60;
+		msec %= 1000;
+
+		Com_sprintf(string, sizeof(string), "%i:%02i ", mins, secs);
+	}
+	else {
+		time_t rawtime;
+		time(&rawtime);
+		strftime(string, sizeof(string), "[%Y-%m-%d] [%H:%M:%S] ", localtime(&rawtime));
+	}
+
+	len = strlen(string);
+
+	va_start(argptr, fmt);
+	Q_vsnprintf(string + len, sizeof(string) - len, fmt, argptr);
+	va_end(argptr);
+
+	if (!fileHandle)
+		return;
+
+	Q_StripColor(string);
+
+	trap->FS_Write(string, strlen(string), fileHandle);
+}
+
 static void CG_OpenLog(const char *filename, fileHandle_t *f, qboolean sync) {
 	trap->FS_Open(filename, f, sync ? FS_APPEND_SYNC : FS_APPEND);
 	if (*f)
-		trap->Print(va("Logging to %s\n", filename));
+		trap->Print("Logging to %s\n", filename);
 	else
-		trap->Print(va("WARNING: Couldn't open logfile: %s\n", filename));
+		trap->Print(S_COLOR_YELLOW "WARNING: Couldn't open logfile: %s\n", filename);
+
+	cg.log.started = qfalse;
 }
 
 static void CG_CloseLog(fileHandle_t *f) {
@@ -2625,6 +2673,8 @@ static void CG_CloseLog(fileHandle_t *f) {
 
 	trap->FS_Close(*f);
 	*f = ((fileHandle_t)0);
+
+	cg.log.started = qfalse;
 }
 
 //JK2 HUD
@@ -2675,7 +2725,6 @@ Called after every level change or subsystem restart
 Will perform callbacks to make the loading info screen update.
 =================
 */
-extern void CG_Set2DRatio(void);
 void CG_Init( int serverMessageNum, int serverCommandSequence, int clientNum )
 {
 	static gitem_t *item;
@@ -2720,6 +2769,7 @@ Ghoul2 Insert End
 	//	if desired during parse.  Dunno how legal it is to store in these cgDC things, but it causes no harm
 	//	and even if/when they get overwritten they'll be legalised by the menu asset parser :-)
 //	CG_LoadFonts();
+	CG_InitDisplayContext();
 	cgDC.Assets.qhSmallFont  = trap->R_RegisterFont("ocr_a");
 	cgDC.Assets.qhMediumFont = trap->R_RegisterFont("ergoec");
 	cgDC.Assets.qhBigFont = cgDC.Assets.qhMediumFont;
@@ -2733,18 +2783,20 @@ Ghoul2 Insert End
 	cgs.processedSnapshotNum = serverMessageNum;
 	cgs.serverCommandSequence = serverCommandSequence;
 
-	cg.loadLCARSStage		= 0;
+	cg.loadLCARSStage = 0;
 
 	cg.itemSelect = -1;
 	cg.forceSelect = -1;
 
-	// load a few needed things before we do any screen updates
-	cgs.media.charsetShader		= trap->R_RegisterShaderNoMip( "gfx/2d/charsgrid_med" );
-	cgs.media.whiteShader		= trap->R_RegisterShader( "white" );
+	cg.loading = qtrue;	// force players to load instead of defer
 
-	cgs.media.loadBarLED		= trap->R_RegisterShaderNoMip( "gfx/hud/load_tick" );
-	cgs.media.loadBarLEDCap		= trap->R_RegisterShaderNoMip( "gfx/hud/load_tick_cap" );
-	cgs.media.loadBarLEDSurround= trap->R_RegisterShaderNoMip( "gfx/hud/mp_levelload" );
+	// load a few needed things before we do any screen updates
+	cgs.media.charsetShader			= trap->R_RegisterShaderNoMip( "gfx/2d/charsgrid_med" );
+	cgs.media.whiteShader			= trap->R_RegisterShader( "white" );
+
+	cgs.media.loadBarLED			= trap->R_RegisterShaderNoMip( "gfx/hud/load_tick" );
+	cgs.media.loadBarLEDCap			= trap->R_RegisterShaderNoMip( "gfx/hud/load_tick_cap" );
+	cgs.media.loadBarLEDSurround	= trap->R_RegisterShaderNoMip( "gfx/hud/mp_levelload" );
 
 	// Force HUD set up
 	cg.forceHUDActive = qtrue;
@@ -2778,12 +2830,14 @@ Ghoul2 Insert End
 
 	cgs.media.weaponIconsStaff = trap->R_RegisterShaderNoMip("gfx/hud/w_icon_saberstaff"); //no NA icon for these?
 	cgs.media.weaponIconsAkimbo = trap->R_RegisterShaderNoMip("gfx/hud/w_icon_duallightsaber");
+	if (!cgs.media.weaponIconsStaff) cgs.media.weaponIconsStaff = cgs.media.weaponIcons[WP_SABER];
+	if (!cgs.media.weaponIconsAkimbo) cgs.media.weaponIconsAkimbo = cgs.media.weaponIcons[WP_SABER];
 
 
 	// HUD artwork for cycling inventory,weapons and force powers
-	cgs.media.weaponIconBackground		= trap->R_RegisterShaderNoMip( "gfx/hud/background");
-	cgs.media.forceIconBackground		= trap->R_RegisterShaderNoMip( "gfx/hud/background_f");
-	cgs.media.inventoryIconBackground	= trap->R_RegisterShaderNoMip( "gfx/hud/background_i");
+	cgs.media.weaponIconBackground		= trap->R_RegisterShaderNoMip("gfx/hud/background");
+	cgs.media.forceIconBackground		= trap->R_RegisterShaderNoMip("gfx/hud/background_f");
+	cgs.media.inventoryIconBackground	= trap->R_RegisterShaderNoMip("gfx/hud/background_i");
 
 	//rww - precache holdable item icons here
 	while (i < bg_numItems)
@@ -2826,7 +2880,7 @@ Ghoul2 Insert End
 	CG_InitConsoleCommands();
 
 	// chatlogs
-	if (cg_logChat.integer) {
+	if (cg_logChat.integer & JAPRO_CHATLOG_ENABLE) {
 		struct tm		*newtime;
 		time_t			rawtime;
 		char			logname[32];
@@ -2835,10 +2889,11 @@ Ghoul2 Insert End
 		newtime = localtime(&rawtime);
 		strftime(logname, sizeof(logname), "chatlogs/cg_%y-%b.log", newtime);
 
-		CG_OpenLog(logname, &cg.log.chat, ((cg_logChat.integer & JAPRO_CHATLOG_SYNC) ? qtrue : qfalse));
+		CG_OpenLog(logname, &cg.log.file, (qboolean)(cg_logChat.integer & JAPRO_CHATLOG_SYNC));
 	}
-	else
+	else {
 		trap->Print("Not logging chat to disk.\n");
+	}
 
 	cg.renderingThirdPerson = cg_thirdPerson.integer;
 
@@ -2852,7 +2907,7 @@ Ghoul2 Insert End
 	trap->GetGlconfig( &cgs.glconfig );
 	cgs.screenXScale = cgs.glconfig.vidWidth / SCREEN_WIDTH;
 	cgs.screenYScale = cgs.glconfig.vidHeight / SCREEN_HEIGHT;
-	CG_Set2DRatio(); // set 2D Ratio Coefficient 
+	UI_Set2DRatio();
 
 	// get the gamestate from the client system
 	trap->GetGameState( &cgs.gameState );
@@ -2864,6 +2919,24 @@ Ghoul2 Insert End
 	if ( strcmp( s, GAME_VERSION ) ) {
 		//trap->Error( ERR_DROP, "Client/Server game mismatch: %s/%s", GAME_VERSION, s );
 		Com_Printf("Client/Server game mismatch: %s/%s\n", GAME_VERSION, s); //LOL?
+	}
+
+	{//cheap engine detection
+		int ps;
+		char verstring[42], psbuf[4];
+		cgs.jaPROEngine = qfalse;
+		trap->Cvar_VariableStringBuffer("version", verstring, sizeof(verstring));
+		//ppl could fake this in their cfgs, but i think thats their problem...
+		trap->Cvar_VariableStringBuffer("protocolswitch", psbuf, sizeof(psbuf));
+		ps = atoi(psbuf);
+		//this is only really to handle custom RF flags I added for player effects
+		if (Q_stricmpn(verstring, "JAmp: v1.0.1.0 win-x86 Oct24 2003", 34) && (ps == 1 || ps == 2)) {
+			cgs.jaPROEngine = qtrue;
+		}
+
+		//if (!cgs.jaPROEngine) {
+		//	trap->Cvar_Set("name", "jamp jumper");
+		//}
 	}
 
 	s = CG_ConfigString( CS_LEVEL_START_TIME );
@@ -2878,11 +2951,10 @@ Ghoul2 Insert End
 
 	String_Init();
 
-	cg.loading = qtrue;		// force players to load instead of defer
-
 	//make sure saber data is loaded before this! (so we can precache the appropriate hilts)
 	CG_InitSiegeMode();
 
+	cg.coldBreathEffects = qfalse;
 	CG_RegisterSounds();
 
 //	CG_LoadingString( "graphics" );
@@ -3009,8 +3081,9 @@ void CG_Shutdown( void )
 	// like closing files or archiving session data
 
 	// close chat log file
-	CG_LogPrintf( cg.log.chat, "End logging\n------------------------------------------------------------\n\n" );
-	CG_CloseLog( &cg.log.chat );
+	if (cg.log.started)
+		CG_LogPrintf( cg.log.file, "End log\n----------------------------------------------------------------\n\n" );
+	CG_CloseLog( &cg.log.file);
 }
 
 /*
@@ -3027,7 +3100,14 @@ void CG_NextForcePower_f( void )
 		return;
 	}
 
-	if (cg.predictedPlayerState.pm_type == PM_SPECTATOR)
+	if (cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE])
+	{
+		cg.itemSelect = HI_BINOCULARS; //so +useforce will zoom with binoculars
+		trap->SendClientCommand("amTeleMark");
+		return;
+	}
+
+	if (cg.predictedPlayerState.pm_type == PM_SPECTATOR || (cg.predictedPlayerState.pm_flags & PMF_FOLLOW))
 	{
 		return;
 	}
@@ -3037,11 +3117,6 @@ void CG_NextForcePower_f( void )
 	if ((cmd.buttons & BUTTON_USE) || CG_NoUseableForce())
 	{
 		CG_NextInventory_f();
-		return;
-	}
-
-	if (cg.snap->ps.pm_flags & PMF_FOLLOW)
-	{
 		return;
 	}
 
@@ -3075,7 +3150,14 @@ void CG_PrevForcePower_f( void )
 		return;
 	}
 
-	if (cg.predictedPlayerState.pm_type == PM_SPECTATOR)
+	if (cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE])
+	{
+		cg.itemSelect = HI_BINOCULARS; //so +useforce will zoom with binoculars
+		trap->SendClientCommand("amTele");
+		return;
+	}
+
+	if (cg.predictedPlayerState.pm_type == PM_SPECTATOR || (cg.predictedPlayerState.pm_flags & PMF_FOLLOW))
 	{
 		return;
 	}
@@ -3085,11 +3167,6 @@ void CG_PrevForcePower_f( void )
 	if ((cmd.buttons & BUTTON_USE) || CG_NoUseableForce())
 	{
 		CG_PrevInventory_f();
-		return;
-	}
-
-	if (cg.snap->ps.pm_flags & PMF_FOLLOW)
-	{
 		return;
 	}
 

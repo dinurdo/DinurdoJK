@@ -207,7 +207,7 @@ static int GetFlipkick(playerState_t *ps) {
 		}
 		return g_flipKick.integer;
 #else
-		if (cgs.isJAPro) {
+		if (cgs.serverMod == SVMOD_JAPRO) {
 			if (ps->duelInProgress) {
 				if (cg_dueltypes[ps->clientNum] == 1) { //NF 
 					return 0;
@@ -219,7 +219,7 @@ static int GetFlipkick(playerState_t *ps) {
 				return 2; //1 ans 2 are the same thing clientside...hmm
 			}
 		}
-		if (cgs.isJAPlus && (cgs.cinfo & JAPLUS_CINFO_FLIPKICK))
+		if (cgs.serverMod == SVMOD_JAPLUS && (cgs.cinfo & JAPLUS_CINFO_FLIPKICK))
 			return 1;
 
 		return 0;
@@ -248,7 +248,7 @@ static int GetFixRoll(playerState_t *ps) {
 		}
 		return g_fixRoll.integer;
 #else
-		if (cgs.isJAPro) {
+		if (cgs.serverMod == SVMOD_JAPRO) {
 			if (ps->stats[STAT_RACEMODE])
 				return 3;
 			if (ps->duelInProgress) {
@@ -260,11 +260,12 @@ static int GetFixRoll(playerState_t *ps) {
 				}
 			}
 		}
-		if ((cgs.isJAPlus && cgs.cinfo & JAPLUS_CINFO_FIXROLL3) || (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FIXROLL3))
+
+		if ((cgs.serverMod == SVMOD_JAPLUS && cgs.cinfo & JAPLUS_CINFO_FIXROLL3) || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FIXROLL3))
 			return 3;
-		if ((cgs.isJAPlus && cgs.cinfo & JAPLUS_CINFO_FIXROLL2) || (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FIXROLL2) || cgs.legacyProtocol)
+		if ((cgs.serverMod == SVMOD_JAPLUS && cgs.cinfo & JAPLUS_CINFO_FIXROLL2) || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FIXROLL2) || cgs.legacyProtocol)
 			return 2;
-		if ((cgs.isJAPlus && cgs.cinfo & JAPLUS_CINFO_FIXROLL1) || (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FIXROLL1))
+		if ((cgs.serverMod == SVMOD_JAPLUS && cgs.cinfo & JAPLUS_CINFO_FIXROLL1) || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FIXROLL1))
 			return 1;
 
 		return 0;
@@ -396,7 +397,7 @@ QINLINE int PM_GetMovePhysics(void)
 	else if (g_movementStyle.integer >= MV_NUMSTYLES)
 		return 1;
 #else
-	if (cgs.isJAPro) {
+	if (cgs.serverMod == SVMOD_JAPRO) {
 		if (cg.predictedPlayerState.m_iVehicleNum)
 			return MV_SWOOP;
 		return cg.predictedPlayerState.stats[STAT_MOVEMENTSTYLE];
@@ -1224,20 +1225,14 @@ static void PM_Friction( void ) {
 #ifdef _GAME
 		if (g_slideOnPlayer.integer)
 #else
-		if (cgs.isJAPro) {
-			if (cgs.jcinfo & JAPRO_CINFO_HEADSLIDE)
-				drop = 0;
-		}
-		else if (cgs.isJAPlus) {
-			if (cgs.cinfo & JAPLUS_CINFO_HEADSLIDE)
-				drop = 0;
-		}
-		else if (cgs.isBaseEnhanced)
-		{
+		if ((cgs.serverMod == SVMOD_JAPRO && !(cgs.jcinfo & JAPRO_CINFO_HEADSLIDE)) || (cgs.serverMod == SVMOD_JAPLUS && !(cgs.cinfo & JAPLUS_CINFO_HEADSLIDE)) || cgs.serverMod == SVMOD_BASEENHANCED)
+		{//no headslide, so do nothing
 		}
 		else
 #endif
+		{
 			drop = 0;
+		}
 	}
 
 	if ( pm->ps->pm_type == PM_SPECTATOR || pm->ps->pm_type == PM_FLOAT )
@@ -1722,7 +1717,7 @@ qboolean PM_AdjustAngleForWallRunUp( playerState_t *ps, usercmd_t *ucmd, qboolea
 		}
 
 		//Forwardmove is 0 here when it shouldnt be with lowfps due to chopping
-		if ( //ucmd->upmove <= 0 &&
+		if ( //ucmd->upmove <= 0 && 
 			ps->legsTimer > 0 &&
 			ucmd->forwardmove > 0 &&
 			trace.fraction < 1.0f &&
@@ -1865,7 +1860,7 @@ qboolean PM_AdjustAngleForWallJump( playerState_t *ps, usercmd_t *ucmd, qboolean
 #ifdef _GAME
 		if (1) //uhhh
 #else
-		if (cgs.isJAPlus || cgs.isJAPro)
+		if (cgs.serverMod >= SVMOD_JAPLUS)
 #endif
 		{
 			if ( pm->debugMelee > 1)
@@ -1890,6 +1885,10 @@ qboolean PM_AdjustAngleForWallJump( playerState_t *ps, usercmd_t *ucmd, qboolean
 					}
 				}
 			}
+#ifdef _CGAME
+			if (cgs.serverMod == SVMOD_JAPLUS)
+				PM_UpdateViewAngles(ps, ucmd); //update here for vertical freelook prediction
+#endif
 		}
 		else if ( pm->debugMelee )
 		{//uber-skillz
@@ -2226,9 +2225,9 @@ static qboolean PM_CheckJump( void )
 						{
 //JAPRO - Serverside - OnlyBhop - Start
 #ifdef _GAME
-							if ((g_onlyBhop.integer == 1) || ((g_onlyBhop.integer > 1) && client->pers.onlyBhop) || (client->ps.stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_BHOP))
+							if (g_onlyBhop.integer == 1 || (client != NULL && ((g_onlyBhop.integer > 1 && client->pers.onlyBhop) || (client->ps.stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_BHOP))))
 #else
-							if (cgs.isJAPro && ((cgs.jcinfo & JAPRO_CINFO_BHOP1) || ((cgs.jcinfo & JAPRO_CINFO_BHOP2) && (cp_pluginDisable.integer & JAPRO_PLUGIN_BHOP)) || (pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_BHOP)))
+							if (cgs.serverMod == SVMOD_JAPRO && ((cgs.jcinfo & JAPRO_CINFO_BHOP1) || ((cgs.jcinfo & JAPRO_CINFO_BHOP2) && (cp_pluginDisable.integer & JAPRO_PLUGIN_BHOP)) || (pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_BHOP)))
 #endif
 							{
 								pm->cmd.upmove = 0;
@@ -2389,6 +2388,18 @@ static qboolean PM_CheckJump( void )
 							pm->ps->velocity[2] = JUMP_VELOCITY;
 					}
 				}
+#ifdef _GAME
+				if ((pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_CROUCHJUMP) && ((pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_BHOP) ||
+					(g_onlyBhop.integer == 1) || ((g_onlyBhop.integer > 1) && client->pers.onlyBhop)))
+#else
+				if (cgs.serverMod == SVMOD_JAPRO && (pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_CROUCHJUMP) &&
+					((pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_BHOP) || (cgs.jcinfo & JAPRO_CINFO_BHOP1) || ((cgs.jcinfo & JAPRO_CINFO_BHOP2) && (cp_pluginDisable.integer & JAPRO_PLUGIN_BHOP))))
+#endif
+				{ // so we can force different jump heights with ONLYBHOP restrict
+					pm->cmd.upmove = 0;
+					pm->ps->pm_flags &= ~PMF_JUMP_HELD;
+				}
+
 				if (moveStyle != MV_QW && moveStyle != MV_CPM && moveStyle != MV_Q3 && moveStyle != MV_PJK && moveStyle != MV_WSW && moveStyle != MV_RJQ3 && moveStyle != MV_RJCPM && moveStyle != MV_JETPACK && moveStyle != MV_SLICK && moveStyle != MV_BOTCPM) {
 					{
 						pm->cmd.upmove = 0; // change this to allow hold to jump?
@@ -2460,7 +2471,7 @@ static qboolean PM_CheckJump( void )
 #ifdef _GAME
 		if (pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_BHOP)
 #else
-		if (cgs.isJAPro && pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_BHOP)
+		if (cgs.serverMod == SVMOD_JAPRO && pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_BHOP)
 #endif
 		{
 			allowWallRuns = qfalse;
@@ -2551,7 +2562,7 @@ static qboolean PM_CheckJump( void )
 							anim = BOTH_WALL_FLIP_RIGHT;
 						}
 					#else
-						if (cgs.isJAPro && (cgs.jcinfo & JAPRO_CINFO_FIXSIDEKICK) && allowWallFlips && pm->ps->legsAnim != BOTH_WALL_FLIP_RIGHT && pm->ps->legsAnim != BOTH_WALL_FLIP_LEFT)
+						if (cgs.serverMod == SVMOD_JAPRO && (cgs.jcinfo & JAPRO_CINFO_FIXSIDEKICK) && allowWallFlips && pm->ps->legsAnim != BOTH_WALL_FLIP_RIGHT && pm->ps->legsAnim != BOTH_WALL_FLIP_LEFT)
 						{
 							vertPush = forceJumpStrength[FORCE_LEVEL_2]/2.25f;
 							anim = BOTH_WALL_FLIP_RIGHT;
@@ -2596,7 +2607,7 @@ static qboolean PM_CheckJump( void )
 							anim = BOTH_WALL_FLIP_LEFT;
 						}
 					#else
-						if (cgs.isJAPro && (cgs.jcinfo & JAPRO_CINFO_FIXSIDEKICK) && allowWallFlips && pm->ps->legsAnim != BOTH_WALL_FLIP_LEFT && pm->ps->legsAnim != BOTH_WALL_FLIP_RIGHT)
+						if (cgs.serverMod == SVMOD_JAPRO && (cgs.jcinfo & JAPRO_CINFO_FIXSIDEKICK) && allowWallFlips && pm->ps->legsAnim != BOTH_WALL_FLIP_LEFT && pm->ps->legsAnim != BOTH_WALL_FLIP_RIGHT)
 						{
 							vertPush = forceJumpStrength[FORCE_LEVEL_2]/2.25f;
 							anim = BOTH_WALL_FLIP_LEFT;
@@ -2642,7 +2653,7 @@ static qboolean PM_CheckJump( void )
 					contents = MASK_SOLID;
 
 #else
-				if ((cgs.isJAPlus && cgs.cinfo & JAPLUS_CINFO_FLIPKICK) || (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FLIPKICK))
+				if ((cgs.serverMod == SVMOD_JAPLUS && cgs.cinfo & JAPLUS_CINFO_FLIPKICK) || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FLIPKICK))
 					contents = MASK_PLAYERSOLID;//MASK_PLAYERSOLID; 
 				else 
 					contents = MASK_SOLID;//MASK_PLAYERSOLID; 
@@ -2726,7 +2737,7 @@ static qboolean PM_CheckJump( void )
 #ifdef _GAME
 							if ((trace.entityNum < MAX_CLIENTS) || (g_flipKick.integer && kickedEnt->s.eType == ET_NPC))
 #else
-							if ((trace.entityNum < MAX_CLIENTS) || ((cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FLIPKICK) && kickedEnt->s.eType == ET_NPC))
+							if ((trace.entityNum < MAX_CLIENTS) || ((cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FLIPKICK) && kickedEnt->s.eType == ET_NPC))
 #endif
 */
 
@@ -2954,7 +2965,7 @@ static qboolean PM_CheckJump( void )
 #ifdef _GAME
 						if ((trace.entityNum < MAX_CLIENTS) || (g_flipKick.integer && kickedEnt->s.eType == ET_NPC))
 #else
-						if ((trace.entityNum < MAX_CLIENTS) || ((cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FLIPKICK) && kickedEnt->s.eType == ET_NPC))
+						if ((trace.entityNum < MAX_CLIENTS) || ((cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FLIPKICK) && kickedEnt->s.eType == ET_NPC))
 #endif	
 */
 						pm->ps->forceKickFlip = trace.entityNum+1; //let the server know that this person gets kicked by this client
@@ -3029,7 +3040,7 @@ static qboolean PM_CheckJump( void )
 #ifdef _GAME
 						if (g_flipKick.integer >= 1) {
 #else
-						if ((cgs.isJAPlus && cgs.cinfo & JAPLUS_CINFO_FLIPKICK) || (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FLIPKICK)) {
+						if ((cgs.serverMod == SVMOD_JAPLUS && cgs.cinfo & JAPLUS_CINFO_FLIPKICK) || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FLIPKICK)) {
 #endif
 */
 							if (kick && traceEnt && (traceEnt->s.eType == ET_PLAYER || traceEnt->s.eType == ET_NPC)) {
@@ -3136,7 +3147,7 @@ static qboolean PM_CheckJump( void )
 #ifdef _GAME
 	if ((g_tweakSaber.integer & ST_JK2RDFA) && !pm->ps->stats[STAT_RACEMODE])
 #else
-	if (((cgs.isJAPro && !pm->ps->stats[STAT_RACEMODE] && (cgs.jcinfo & JAPRO_CINFO_JK2DFA)) || (cgs.isJAPlus && (cgs.jcinfo & JAPLUS_CINFO_JK2DFA))))
+	if ((cgs.serverMod == SVMOD_JAPRO && !pm->ps->stats[STAT_RACEMODE] && (cgs.jcinfo & JAPRO_CINFO_JK2DFA)) || (cgs.serverMod == SVMOD_JAPLUS && (cgs.jcinfo & JAPLUS_CINFO_JK2DFA)))
 #endif
 	{
 		if ( pm->cmd.upmove > 0 
@@ -4541,7 +4552,7 @@ static int PM_TryRoll( void )
 
 		if (client && client->pers.noRoll)
 #else
-		if (cgs.isJAPro && (cp_pluginDisable.integer & JAPRO_PLUGIN_NOROLL))
+		if (cgs.serverMod == SVMOD_JAPRO && (cp_pluginDisable.integer & JAPRO_PLUGIN_NOROLL))
 #endif
 		{
 			return 0;
@@ -5802,7 +5813,7 @@ qboolean PM_RunningAnim( int anim )
 #ifdef _GAME
 		return qtrue;
 #else
-		if (cgs.isJAPro)
+		if (cgs.serverMod == SVMOD_JAPRO)
 			return qtrue;
 #endif
 		break;
@@ -5987,7 +5998,6 @@ qboolean BG_InSlopeAnim( int anim )
 }
 
 #define	SLOPE_RECALC_INT 100
-
 qboolean PM_AdjustStandAnimForSlope( void )
 {
 	float	diff;
@@ -6008,7 +6018,7 @@ qboolean PM_AdjustStandAnimForSlope( void )
 	}
 	if (!g_LegDangle.integer && client && client->pers.isJAPRO)
 #else
-	if (cgs.isJAPro && (cgs.jcinfo & JAPRO_CINFO_LEGDANGLE)) // Loda fixme, maybe give clients option to choose? idk why they would want to..
+	if (cgs.serverMod == SVMOD_JAPRO && (cgs.jcinfo & JAPRO_CINFO_LEGDANGLE)) // Loda fixme, maybe give clients option to choose? idk why they would want to..
 #endif
 		return qfalse;
 
@@ -6543,12 +6553,9 @@ static void PM_Footsteps( void ) {
 //[JAPRO - Serverside + Clientside - Physics - Add roll types - Start]
 		
 		{
-#ifndef _CGAME
-			if (((GetFixRoll(pm->ps) > 1 && (PM_RunningAnim(pm->ps->legsAnim) || PM_CanRollFromSoulCal(pm->ps))) ||
-#else	
-			if ((GetFixRoll(pm->ps) > 1 && (PM_RunningAnim(pm->ps->legsAnim) || PM_CanRollFromSoulCal(pm->ps)) ||
-#endif
-				((GetFixRoll(pm->ps) == 1) && (PM_RunningAnim(pm->ps->legsAnim) && VectorLengthSquared(pm->ps->velocity)>=30000)) ||
+			int fixRoll = GetFixRoll(pm->ps);
+			if (((fixRoll > 1 && (PM_RunningAnim(pm->ps->legsAnim) || PM_CanRollFromSoulCal(pm->ps))) ||
+				((fixRoll == 1) && (PM_RunningAnim(pm->ps->legsAnim) && VectorLengthSquared(pm->ps->velocity)>=30000)) ||
 				(PM_RunningAnim(pm->ps->legsAnim) && VectorLengthSquared(pm->ps->velocity)>=40000)))
 				rolled = PM_TryRoll();
 
@@ -6567,7 +6574,7 @@ static void PM_Footsteps( void ) {
 				rolled = PM_TryRoll();
 			}
 #else
-			if (cgs.isJAPro )
+			if (cgs.serverMod == SVMOD_JAPRO )
 			{
 				if ((cgs.jcinfo & JAPRO_CINFO_FIXROLL3 || cgs.jcinfo & JAPRO_CINFO_FIXROLL2) && (PM_RunningAnim(pm->ps->legsAnim) || PM_CanRollFromSoulCal(pm->ps)))
 				{
@@ -6582,7 +6589,7 @@ static void PM_Footsteps( void ) {
 					rolled = PM_TryRoll();
 				}
 			}
-			else if (cgs.isJAPlus) 
+			else if (cgs.serverMod == SVMOD_JAPLUS) 
 			{
 				if ((cgs.cinfo & JAPLUS_CINFO_FIXROLL3 || cgs.cinfo & JAPLUS_CINFO_FIXROLL2) && (PM_RunningAnim(pm->ps->legsAnim) || PM_CanRollFromSoulCal(pm->ps)))
 				{
@@ -6756,7 +6763,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6771,7 +6778,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6786,7 +6793,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6801,7 +6808,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6816,7 +6823,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6829,7 +6836,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6861,7 +6868,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6874,7 +6881,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6889,7 +6896,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6902,7 +6909,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6918,7 +6925,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6931,7 +6938,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6944,7 +6951,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6959,7 +6966,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -6972,7 +6979,7 @@ static void PM_Footsteps( void ) {
 								desiredAnim = BOTH_RUN4;
 							else
 #else
-							if (cgs.isJAPro && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
+							if (cgs.serverMod == SVMOD_JAPRO && (!(cgs.jcinfo & JAPRO_CINFO_NOJAWARUN)) && (cp_pluginDisable.integer & JAPRO_PLUGIN_JAWARUN))
 								desiredAnim = BOTH_RUN4;
 							else
 #endif
@@ -9229,7 +9236,7 @@ if (pm->ps->duelInProgress)
 				else if (pm->ps->weapon == WP_ROCKET_LAUNCHER && (g_tweakWeapons.integer & WT_ROCKET_MORTAR) && !pm->ps->stats[STAT_RACEMODE])
 					addTime = 3000;
 				else if (pm->ps->weapon == WP_THERMAL && (g_tweakWeapons.integer & WT_IMPACT_NITRON))
-					addTime = 2000;
+					addTime = 1500;
 				else
 #endif
 					addTime = weaponData[pm->ps->weapon].altFireTime;
@@ -9244,7 +9251,7 @@ if (pm->ps->duelInProgress)
 			else if (pm->ps->weapon == WP_STUN_BATON && g_tweakWeapons.integer & WT_STUN_LG)
 				addTime = 50;
 			else if (pm->ps->weapon == WP_THERMAL && (g_tweakWeapons.integer & WT_IMPACT_NITRON))
-				addTime = 2000;
+				addTime = 1500;
 			else
 #endif
 			addTime = weaponData[pm->ps->weapon].fireTime;
@@ -9844,7 +9851,7 @@ void BG_CmdForRoll( playerState_t *ps, int anim, usercmd_t *pCmd )
 		pCmd->rightmove = 0;
 		break;
 #else
-		if (((cgs.isJAPlus && cgs.cinfo & JAPLUS_CINFO_FIXROLL3) || (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FIXROLL3)) && (pCmd->forwardmove < 0)) 
+		if (((cgs.serverMod == SVMOD_JAPLUS && cgs.cinfo & JAPLUS_CINFO_FIXROLL3) || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FIXROLL3)) && (pCmd->forwardmove < 0)) 
 			break;
 		pCmd->forwardmove = 127;
 		pCmd->rightmove = 0;
@@ -9978,6 +9985,7 @@ qboolean PM_SaberInTransition( int move );
 void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 {
 	saberInfo_t	*saber;
+	int fixroll = GetFixRoll(ps);
 
 	if (ps->clientNum >= MAX_CLIENTS)
 	{
@@ -10007,7 +10015,7 @@ void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 	}
 
 
-	if ( cmd->forwardmove < 0 && !(cmd->buttons&BUTTON_WALKING) && pm->ps->groundEntityNum != ENTITYNUM_NONE )
+	if ( cmd->forwardmove < 0 && !(cmd->buttons&BUTTON_WALKING) && pm->ps->groundEntityNum != ENTITYNUM_NONE && !JK2SWINGS(ps) )
 	{//running backwards is slower than running forwards (like SP)
 		ps->speed *= 0.75f;
 	}
@@ -10017,7 +10025,7 @@ void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 #ifdef _GAME
 		if (g_tweakForce.integer & FT_FASTGRIP)
 #else
-		if (cgs.isJAPlus || (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FASTGRIP))
+		if (cgs.serverMod == SVMOD_JAPLUS || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FASTGRIP))
 #endif
 			ps->speed *= 0.8f;
 		else
@@ -10029,7 +10037,7 @@ void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 #ifdef _GAME
  	if ((g_tweakForce.integer & FT_FORCECOMBO) && ps->fd.forcePowersActive & (1 << FP_SPEED) && ps->fd.forcePowersActive & (1 << FP_RAGE))
 #else
-	if (cgs.isJAPro && (cgs.jcinfo & JAPRO_CINFO_FORCECOMBO) && ps->fd.forcePowersActive & (1 << FP_SPEED) && ps->fd.forcePowersActive & (1 << FP_RAGE))
+	if (cgs.serverMod == SVMOD_JAPRO && (cgs.jcinfo & JAPRO_CINFO_FORCECOMBO) && ps->fd.forcePowersActive & (1 << FP_SPEED) && ps->fd.forcePowersActive & (1 << FP_RAGE))
 #endif
 	{
 		ps->speed *= 2.2f;
@@ -10085,7 +10093,7 @@ void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 	}
 	else if ( BG_SpinningSaberAnim( ps->legsAnim ) )
 	{
-		if (ps->fd.saberAnimLevel == FORCE_LEVEL_3)
+		if (ps->fd.saberAnimLevel == FORCE_LEVEL_3 && !JK2SWINGS(ps))
 		{
 			ps->speed *= 0.3f;
 		}
@@ -10104,20 +10112,13 @@ void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 			ps->speed *= 0.85f;
 			break;
 		case FORCE_LEVEL_3:
-#if _GAME
-			if (g_tweakSaber.integer & ST_NO_REDCHAIN && !ps->stats[STAT_RACEMODE])
-#else
-			if (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_NOREDCHAIN && !cg.predictedPlayerState.stats[STAT_RACEMODE])
-#endif
-				ps->speed *= 0.70f;
-			else
-				ps->speed *= 0.55f;
+			ps->speed *= JK2SWINGS(ps) ? 0.70f : 0.55f;
 			break;
 		default:
 			break;
 		}
 	}
-	else if (ps->weapon == WP_SABER && ps->fd.saberAnimLevel == FORCE_LEVEL_3 &&
+	else if (ps->weapon == WP_SABER && ps->fd.saberAnimLevel == FORCE_LEVEL_3 && !JK2SWINGS(ps) &&
 		PM_SaberInTransition(ps->saberMove))
 	{ //Now, we want to even slow down in transitions for level 3 (since it has chains and stuff now)
 		if (cmd->forwardmove < 0)
@@ -10134,12 +10135,12 @@ void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 #ifdef _GAME
 	if (g_fixRoll.integer > 2)//fixroll 3
 #else
-	if ((cgs.isJAPlus && cgs.cinfo & JAPLUS_CINFO_FIXROLL3) || (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FIXROLL3))//fixroll3
+	if ((cgs.serverMod == SVMOD_JAPLUS && cgs.cinfo & JAPLUS_CINFO_FIXROLL3) || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FIXROLL3))//fixroll3
 #endif
 	*/
 
 
-	if (GetFixRoll(ps) > 2)
+	if (fixroll > 2)
 	{
 		if ( BG_InRoll( ps, ps->legsAnim ) && ps->speed > 50.0f )
 		{ //can't roll unless you're able to move normally
@@ -10181,11 +10182,11 @@ void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 #ifdef _GAME
 	else if (g_fixRoll.integer == 2)//fixroll 2
 #else
-	else if ((cgs.isJAPlus && cgs.cinfo & JAPLUS_CINFO_FIXROLL2) || (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FIXROLL2))//fixroll2
+	else if ((cgs.serverMod == SVMOD_JAPLUS && cgs.cinfo & JAPLUS_CINFO_FIXROLL2) || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FIXROLL2))//fixroll2
 #endif
 	*/
 
-	else if (GetFixRoll(ps) == 2)
+	else if (fixroll == 2)
 	{
 		if ( BG_InRoll( ps, ps->legsAnim ) && ps->speed > 50 )
 		{ //can't roll unless you're able to move normally
@@ -10223,11 +10224,11 @@ void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 #ifdef _GAME
 	else if (g_fixRoll.integer == 1)//fixroll 1
 #else
-	else if ((cgs.isJAPlus && cgs.cinfo & JAPLUS_CINFO_FIXROLL1) || (cgs.isJAPro && cgs.jcinfo & JAPRO_CINFO_FIXROLL1))//fixroll1
+	else if ((cgs.serverMod == SVMOD_JAPLUS && cgs.cinfo & JAPLUS_CINFO_FIXROLL1) || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FIXROLL1))//fixroll1
 #endif
 */
 
-	else if (GetFixRoll(ps) == 1)
+	else if (fixroll == 1)
 	{
 		if ( BG_InRoll( ps, ps->legsAnim ) && ps->speed > 50 )
 		{ //can't roll unless you're able to move normally
@@ -11991,16 +11992,22 @@ void PmoveSingle (pmove_t *pmove) {
 
 	pm = pmove;
 
-	if (pm->cmd.buttons & BUTTON_ATTACK && pm->cmd.buttons & BUTTON_USE_HOLDABLE)
-	{
-		pm->cmd.buttons &= ~BUTTON_ATTACK;
-		pm->cmd.buttons &= ~BUTTON_USE_HOLDABLE;
+#ifdef _CGAME
+	if (cgs.serverMod != SVMOD_JAPLUS || pm->ps->weapon != WP_MELEE) {
+#endif
+		if (pm->cmd.buttons & BUTTON_ATTACK && pm->cmd.buttons & BUTTON_USE_HOLDABLE)
+		{
+			pm->cmd.buttons &= ~BUTTON_ATTACK;
+			pm->cmd.buttons &= ~BUTTON_USE_HOLDABLE;
+		}
+		if (pm->cmd.buttons & BUTTON_ALT_ATTACK && pm->cmd.buttons & BUTTON_USE_HOLDABLE)
+		{
+			pm->cmd.buttons &= ~BUTTON_ALT_ATTACK;
+			pm->cmd.buttons &= ~BUTTON_USE_HOLDABLE;
+		}
+#ifdef _CGAME
 	}
-	if (pm->cmd.buttons & BUTTON_ALT_ATTACK && pm->cmd.buttons & BUTTON_USE_HOLDABLE)
-	{
-		pm->cmd.buttons &= ~BUTTON_ALT_ATTACK;
-		pm->cmd.buttons &= ~BUTTON_USE_HOLDABLE;
-	}
+#endif
 
 	if (pm->ps->emplacedIndex)
 	{
@@ -12188,7 +12195,7 @@ void PmoveSingle (pmove_t *pmove) {
 				stiffenedUp = qtrue;
 //[JAPRO - Serverside +clientside - Physics - Unlock bow movement/turning- Start]
 #ifdef _CGAME
-				if (cgs.isJAPlus || cgs.isJAPro)
+				if (cgs.serverMod >= SVMOD_JAPLUS)
 				{
 				}
 				else
@@ -12205,7 +12212,7 @@ void PmoveSingle (pmove_t *pmove) {
 			else if ( pm->ps->legsTimer > 0 || pm->ps->torsoTimer > 0 )
 			{
 #ifdef _CGAME
-				if (cgs.isJAPlus || cgs.isJAPro)
+				if (cgs.serverMod >= SVMOD_JAPLUS)
 				{
 				}
 				else
@@ -12263,10 +12270,16 @@ void PmoveSingle (pmove_t *pmove) {
 	}
 
 #ifdef _CGAME
-	if (cgs.isJAPlus) { //some JA+ animation support...
-		if (pm->ps->legsAnim == BOTH_HUGGER1 || pm->ps->legsAnim == BOTH_HUGGEE1)
+	if (cgs.serverMod == SVMOD_JAPLUS) { //some JA+ animation support...
+		if (pm->ps->legsAnim == BOTH_JUMP_BACKFLIP_ATCKEE || pm->ps->torsoAnim == BOTH_JUMP_BACKFLIP_ATCKEE
+			|| pm->ps->torsoAnim == BOTH_GETUP1 || pm->ps->torsoAnim == BOTH_NEW_STABEE
+			|| (pm->ps->legsAnim >= BOTH_KISSEE && pm->ps->legsAnim <= BOTH_LEDGE_MERCPULL))
+		{
+			PM_SetPMViewAngle(pm->ps, pm->ps->viewangles, &pm->cmd);
 			stiffenedUp = qtrue;
-		else if ((pm->ps->legsAnim) >= BOTH_KISSEE && (pm->ps->legsAnim) <= BOTH_MELEE_SPINKICK)
+		}
+		else if ((pm->ps->legsAnim >= BOTH_MELEE_BACKKICK && pm->ps->legsAnim <= BOTH_MELEE_SPINKICK)
+			|| pm->ps->legsAnim == BOTH_JUMP_BACKFLIP_ATCK || pm->ps->torsoAnim == BOTH_JUMP_BACKFLIP_ATCK)
 			stiffenedUp = qtrue;
 	}
 #endif
@@ -12761,8 +12774,9 @@ void PmoveSingle (pmove_t *pmove) {
 			pm->ps->velocity[2] = MAX_JETPACK_VEL_UP;
 		}
 
-		if (gDist2 <  16) {//** changed this so jetpack shuts off on ground
+		if (gDist2 <  16 && pm->cmd.upmove < 0) {//** changed this so jetpack shuts off on ground
 			pm->ps->eFlags &= ~EF_JETPACK_ACTIVE;
+			//Client predicts this wrongly and tries to shut off jetpack resulting in weird prediction errors
 		}
 
 		/*
@@ -12817,10 +12831,6 @@ void PmoveSingle (pmove_t *pmove) {
 			pm->ps->eFlags |= EF_JETPACK_FLAMING;
 		}
 		*/
-
-
-
-
 	}
 
 	if (pm->ps->clientNum >= MAX_CLIENTS &&
@@ -13066,13 +13076,10 @@ void PmoveSingle (pmove_t *pmove) {
 				PM_GrappleMove();
 			}
 #else
-
-			if ((pm->ps->pm_flags & PMF_GRAPPLE) && !(pm->ps->pm_flags & PMF_DUCKED) && (!(cgs.jcinfo & JAPRO_CINFO_JAPLUSGRAPPLE) || pm->ps->stats[STAT_RACEMODE])) {
+			if ((pm->ps->pm_flags & PMF_GRAPPLE) && !(pm->ps->pm_flags & PMF_DUCKED) && cgs.serverMod != SVMOD_JAPLUS && (!(cgs.jcinfo & JAPRO_CINFO_JAPLUSGRAPPLE) || pm->ps->stats[STAT_RACEMODE]))
 				PM_GrappleMoveTarzan();
-			} 
-			if ((pm->ps->pm_flags & PMF_GRAPPLE) && !(pm->ps->pm_flags & PMF_DUCKED) && (cgs.jcinfo & JAPRO_CINFO_JAPLUSGRAPPLE)) {
+			if ((pm->ps->pm_flags & PMF_GRAPPLE) && !(pm->ps->pm_flags & PMF_DUCKED) && (cgs.serverMod == SVMOD_JAPLUS || (cgs.jcinfo & JAPRO_CINFO_JAPLUSGRAPPLE)))
 				PM_GrappleMove();
-			} 
 #endif
 
 #endif
@@ -13121,7 +13128,7 @@ void PmoveSingle (pmove_t *pmove) {
 		}
 		else if (!PM_WeaponOkOnVehicle(pm->cmd.weapon) || !PM_WeaponOkOnVehicle(pm->ps->weapon))
 		{ //this weapon is not legal for the vehicle, force to our current one
-            if (!PM_WeaponOkOnVehicle(pm->ps->weapon))
+	        if (!PM_WeaponOkOnVehicle(pm->ps->weapon))
 			{ //uh-oh!
 				int weap = PM_GetOkWeaponForVehicle();
 
@@ -13177,7 +13184,7 @@ void PmoveSingle (pmove_t *pmove) {
 			//trap->SendServerCommand( -1, va("print \"333? msec: %i\n\"", pml.msec ));
 		}
 	#elif _CGAME
-		else if ((cgs.jcinfo & JAPRO_CINFO_HIGHFPSFIX) && ((pml.msec < 4) || (pml.msec > 25))) {
+		else if ((cgs.jcinfo & JAPRO_CINFO_HIGHFPSFIX) && (pml.msec < 4 || pml.msec > 25)) {
 		}
 	#endif
 		else if (!pm->pmove_float) {
@@ -13245,7 +13252,6 @@ qboolean BG_InRollFixed( playerState_t *ps, int anim )
 	
 	return qfalse;
 }
-
 
 /*
 ================

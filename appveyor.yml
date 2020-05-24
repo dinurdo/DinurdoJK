@@ -10,7 +10,7 @@ after_build:
 - cmd: msbuild /p:Configuration=Release /p:Platform=Win32 install.vcxproj
 artifacts:
 - path: install/JediAcademy/
-  name: eternal-japro-v{build}-win32-x86-portable
+  name: dinurdo-japro-v{build}-win32-x86-portable
 deploy:
 - provider: GitHub
   auth_token:

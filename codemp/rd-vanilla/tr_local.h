@@ -1068,6 +1068,7 @@ struct glconfigExt_t
 	glconfig_t *glConfig;
 
 	qboolean doGammaCorrectionWithShaders;
+	qboolean doStencilShadowsInOneDrawcall;
 	const char *originalExtensionString;
 };
 
@@ -1237,7 +1238,6 @@ extern	cvar_t	*r_marksOnTriangleMeshes;
 
 extern	cvar_t	*r_aspectCorrectFonts;
 extern	cvar_t	*cl_ratioFix;
-extern	cvar_t	*cl_coloredTextShadows;
 
 /*
 Ghoul2 Insert Start
@@ -1371,20 +1371,21 @@ qboolean	R_GetModeInfo( int *width, int *height, int mode );
 void		R_SetColorMappings( void );
 void		R_SetGammaCorrectionLUT();
 void		R_GammaCorrect( byte *buffer, int bufSize );
+void		R_Set2DRatio(void);
 
-void	R_ImageList_f( void );
-void	R_SkinList_f( void );
-void	R_FontList_f( void );
+void		R_ImageList_f( void );
+void		R_SkinList_f( void );
+void		R_FontList_f( void );
 
-void	R_InitFogTable( void );
-float	R_FogFactor( float s, float t );
-void	R_InitImages( void );
-void	R_DeleteTextures( void );
-float	R_SumOfUsedImages( qboolean bUseFormat );
-void	R_InitSkins( void );
-skin_t	*R_GetSkinByHandle( qhandle_t hSkin );
-const void *RB_TakeVideoFrameCmd( const void *data );
-void RE_HunkClearCrap(void);
+void		R_InitFogTable( void );
+float		R_FogFactor( float s, float t );
+void		R_InitImages( void );
+void		R_DeleteTextures( void );
+float		R_SumOfUsedImages( qboolean bUseFormat );
+void		R_InitSkins( void );
+skin_t		*R_GetSkinByHandle( qhandle_t hSkin );
+const void	*RB_TakeVideoFrameCmd( const void *data );
+void		RE_HunkClearCrap(void);
 
 
 //

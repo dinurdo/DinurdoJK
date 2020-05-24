@@ -1312,7 +1312,7 @@ static int G_GetSeason(void) {
 
 	//We want 4 month seasons?
 
-	return 2;
+	return 3;
 }
 
 static void G_UpdateOurLocalRun(sqlite3 * db, int seasonOldRank_self, int seasonNewRank_self, int globalOldRank_self, int globalNewRank_self, int style_self, char *username_self, char *coursename_self, 
@@ -2717,7 +2717,7 @@ void Svcmd_FlagAccount_f( void ) {
 	char username[16];
 
 	if (args != 2 && args != 3 && args != 4) {
-		trap->Print( "Usage: /accountFlag <username> <set (optional)> <flag>\n");
+		trap->Print( "Usage: /flagAccount <username> <set (optional)> <flag>\n");
 		return;
 	}
 
@@ -2767,15 +2767,16 @@ void Svcmd_FlagAccount_f( void ) {
 		}
 		else if (args == 3) {
 			char arg[8] = { 0 };
-			int index;
+			int index, i;
 			const uint32_t mask = (1 << MAX_ACCOUNT_FLAGS) - 1;
+			gclient_t	*cl;
 
 			trap->Argv( 2, arg, sizeof(arg) );
 			index = atoi( arg );
 
 			//DM Start: New -1 toggle all options.
 			if (index < -1 || index >= MAX_ACCOUNT_FLAGS) {  //Whereas we need to allow -1 now, we must change the limit for this value.
-				trap->Print("toggleVote: Invalid range: %i [0-%i, or -1 for toggle all]\n", index, MAX_ACCOUNT_FLAGS - 1);
+				trap->Print("flagAccount: Invalid range: %i [0-%i, or -1 for toggle all]\n", index, MAX_ACCOUNT_FLAGS - 1);
 				CALL_SQLITE (close(db));
 				return;
 			}
@@ -2799,14 +2800,27 @@ void Svcmd_FlagAccount_f( void ) {
 
 			CALL_SQLITE (finalize(stmt));
 			CALL_SQLITE (close(db));
+
+			for (i=0;  i<level.numPlayingClients; i++) {
+				cl = &level.clients[level.sortedClients[i]];
+				if (cl->pers.userName && cl->pers.userName[0] && !Q_stricmp(cl->pers.userName, username)) {
+					if (flags & (1 << index)) 
+						cl->sess.accountFlags &= ~(1 << index);
+					else
+						cl->sess.accountFlags |= (1 << index);
+					break;
+				}
+			}
 		}
 		else if (args == 4) { //set
 			char arg[8] = { 0 };
 			unsigned int bitmask;
 			trap->Argv( 2, arg, sizeof(arg) );
+			int i;
+			gclient_t	*cl;
 
 			if (Q_stricmp(arg, "set")) {
-				trap->Print( "Usage: /accountFlag <username> <set (optional)> <flag>\n");
+				trap->Print( "Usage: /flagAccount <username> <set (optional)> <flag>\n");
 				return;
 			}
 
@@ -2828,6 +2842,14 @@ void Svcmd_FlagAccount_f( void ) {
 
 			CALL_SQLITE (finalize(stmt));
 			CALL_SQLITE (close(db));
+
+			for (i=0;  i<level.numPlayingClients; i++) {
+				cl = &level.clients[level.sortedClients[i]];
+				if (cl->pers.userName && cl->pers.userName[0] && !Q_stricmp(cl->pers.userName, username)) {
+					cl->sess.accountFlags = bitmask;
+					break;
+				}
+			}
 		}
 	}
 }
@@ -5447,7 +5469,7 @@ void Cmd_DFTopRank_f(gentity_t *ent) { //Add season support?
 		if (style == -1) {
 			if (season == -1) {
 				sql = "SELECT username, SUM(entries-rank) AS newscore, CAST(SUM(entries/CAST(rank AS FLOAT)) AS INT) AS oldscore, AVG(rank) as rank, AVG((entries - CAST(rank-1 AS float))/entries) AS percentile, SUM(CASE WHEN rank == 1 THEN 1 ELSE 0 END) AS golds, SUM(CASE WHEN rank == 2 THEN 1 ELSE 0 END) AS silvers, SUM(CASE WHEN rank == 3 THEN 1 ELSE 0 END) AS bronzes, COUNT(*) as count FROM LocalRun "
-					"WHERE rank != 0 AND style != 14 "
+					"WHERE rank != 0 "
 					"GROUP BY username "
 					"ORDER BY oldscore+newscore DESC, rank DESC LIMIT ?, 10";
 				CALL_SQLITE (prepare_v2 (db, sql, strlen (sql) + 1, & stmt, NULL));
@@ -5455,7 +5477,7 @@ void Cmd_DFTopRank_f(gentity_t *ent) { //Add season support?
 			}
 			else {
 				sql = "SELECT username, SUM(season_entries-season_rank) AS newscore, CAST(SUM(season_entries/CAST(season_rank AS FLOAT)) AS INT) AS oldscore, AVG(season_rank) as season_rank, AVG((season_entries - CAST(season_rank-1 AS float))/season_entries) AS percentile, SUM(CASE WHEN season_rank == 1 THEN 1 ELSE 0 END) AS golds, SUM(CASE WHEN season_rank == 2 THEN 1 ELSE 0 END) AS silvers, SUM(CASE WHEN season_rank == 3 THEN 1 ELSE 0 END) AS bronzes, COUNT(*) as count FROM LocalRun "
-					"WHERE season = ? AND style != 14 "
+					"WHERE season = ? "
 					"GROUP BY username "
 					"ORDER BY oldscore+newscore DESC, rank DESC LIMIT ?, 10";
 				CALL_SQLITE (prepare_v2 (db, sql, strlen (sql) + 1, & stmt, NULL));
@@ -6608,6 +6630,7 @@ void Cmd_DFRefresh_f(gentity_t *ent) {
 #endif
 
 int G_AdminAllowed(gentity_t *ent, unsigned int adminCmd, qboolean cheatAllowed, qboolean raceAllowed, char *cmdName);
+int JP_ClientNumberFromString(gentity_t *to, const char *s);
 void Cmd_ACWhois_f( gentity_t *ent ) { //why does this crash sometimes..? conditional open/close issue??
 	int			i;
 	char		msg[1024-128] = {0};
@@ -6629,7 +6652,7 @@ void Cmd_ACWhois_f( gentity_t *ent ) { //why does this crash sometimes..? condit
 			}
 		}
 		else {
-			clientnum = atoi(arg1);
+			clientnum = JP_ClientNumberFromString( ent, arg1 );
 		}
 	}
 	else if (trap->Argc() != 1) {
@@ -6650,13 +6673,13 @@ void Cmd_ACWhois_f( gentity_t *ent ) { //why does this crash sometimes..? condit
 
 	if (whois && seeip) {
 		if (g_raceMode.integer)
-			trap->SendServerCommand(ent-g_entities, "print \"^5   Username            IP                Plugin  Admin   Race  Style    Jump  Hidden  Nickame\n\"");
+			trap->SendServerCommand(ent-g_entities, "print \"^5   Username            IP                Plugin  Admin   Race  Style    Jump  Hidden  Nickname\n\"");
 		else
 			trap->SendServerCommand(ent-g_entities, "print \"^5   Username            IP                Plugin  Admin   Nickname\n\"");
 	}
 	else if (whois) {
 		if (g_raceMode.integer)
-			trap->SendServerCommand(ent-g_entities, "print \"^5   Username            Plugin  Admin   Race  Style    Jump  Hidden  Nickame\n\"");
+			trap->SendServerCommand(ent-g_entities, "print \"^5   Username            Plugin  Admin   Race  Style    Jump  Hidden  Nickname\n\"");
 		else
 			trap->SendServerCommand(ent-g_entities, "print \"^5   Username            Plugin  Admin   Nickname\n\"");
 	}

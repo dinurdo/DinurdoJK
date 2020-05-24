@@ -3759,24 +3759,24 @@ void ClientThink_real( gentity_t *ent ) {
 	else if (pmove_fixed.integer || client->pers.pmoveFixed)
 		ucmd->serverTime = ((ucmd->serverTime + pmove_msec.integer-1) / pmove_msec.integer) * pmove_msec.integer;
 
-	if ((client->sess.sessionTeam != TEAM_SPECTATOR) && !client->ps.stats[STAT_RACEMODE] && (g_movementStyle.integer >= MV_SIEGE && g_movementStyle.integer <= MV_WSW) || g_movementStyle.integer == MV_SP || g_movementStyle.integer == MV_SLICK) { //Ok,, this should be like every frame, right??
+	if ((client->sess.sessionTeam != TEAM_SPECTATOR) && !client->ps.stats[STAT_RACEMODE] && ((g_movementStyle.integer >= MV_SIEGE && g_movementStyle.integer <= MV_WSW) || g_movementStyle.integer == MV_SP || g_movementStyle.integer == MV_SLICK)) { //Ok,, this should be like every frame, right??
 		client->sess.movementStyle = g_movementStyle.integer;
 	}
 	client->ps.stats[STAT_MOVEMENTSTYLE] = client->sess.movementStyle;
 
-	if (g_rabbit.integer && client->ps.powerups[PW_NEUTRALFLAG]) {
-		if (client->ps.fd.forcePowerLevel[FP_LEVITATION] > 1) {
-			client->savedJumpLevel = client->ps.fd.forcePowerLevel[FP_LEVITATION];
-			client->ps.fd.forcePowerLevel[FP_LEVITATION] = 1;
+	if (g_rabbit.integer && !client->ps.stats[STAT_RACEMODE]) {
+		if (client->ps.powerups[PW_NEUTRALFLAG]) {
+			if (client->ps.fd.forcePowerLevel[FP_LEVITATION] > 1) {
+				client->savedJumpLevel = client->ps.fd.forcePowerLevel[FP_LEVITATION];
+				client->ps.fd.forcePowerLevel[FP_LEVITATION] = 1;
+			}
 		}
-	}
-	else if (client->savedJumpLevel) {
-		client->ps.fd.forcePowerLevel[FP_LEVITATION] = client->savedJumpLevel;
+		else if (client->savedJumpLevel) {
+			client->ps.fd.forcePowerLevel[FP_LEVITATION] = client->savedJumpLevel;
+		}
 	}
 	if (client->ps.stats[STAT_RACEMODE]) {
 			client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE] = 3; //make sure its allowed on server? or?
-		if (client->ps.stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_BHOP)
-			client->ps.fd.forcePowerLevel[FP_LEVITATION] = 3;
 	}
 
 	//
@@ -4414,8 +4414,7 @@ void ClientThink_real( gentity_t *ent ) {
 					if (!(ent->client->sess.accountFlags & JAPRO_ACCOUNTFLAG_NODUEL) && !(duelAgainst->client->sess.accountFlags & JAPRO_ACCOUNTFLAG_NODUEL))
 						G_AddDuel(ent->client->pers.lastUserName, duelAgainst->client->pers.lastUserName, ent->client->pers.duelStartTime, dueltypes[ent->client->ps.clientNum], ent->client->ps.stats[STAT_HEALTH], ent->client->ps.stats[STAT_ARMOR]);
 				}
-				if (ent->health < ent->client->ps.stats[STAT_MAX_HEALTH])
-					ent->client->ps.stats[STAT_HEALTH] = ent->health = ent->client->ps.stats[STAT_MAX_HEALTH];
+				ent->client->ps.stats[STAT_HEALTH] = ent->health = ent->client->ps.stats[STAT_MAX_HEALTH];
 				ent->client->ps.stats[STAT_ARMOR] = 25;//JAPRO
 				if (g_spawnInvulnerability.integer) {
 					ent->client->ps.eFlags |= EF_INVULNERABLE;

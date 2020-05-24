@@ -33,17 +33,17 @@
 /* --------------------------------------------------- */
 /* CVARS */
 
-// DinurdoJK HUD cvars:
+// Dinurdo HUD cvars:
 
 XDOCS_CVAR_DEF("cg_movementKeys", "Show the movement keys onscreen",
 	SETTING("0", "Movement keys are hidden") NL
 	SETTING("1", "Movement keys are shown")
 )
 
-XDOCS_CVAR_DEF("cg_movementKeysX", "Horizontal location of the movement keys onscreen",""
+XDOCS_CVAR_DEF("cg_movementKeysX", "Horizontal location of the movement keys",""
 )
 
-XDOCS_CVAR_DEF("cg_movementKeysY", "Vertical location of the movement keys onscreen",""
+XDOCS_CVAR_DEF("cg_movementKeysY", "Vertical location of the movement keys",""
 )
 
 XDOCS_CVAR_DEF("cg_movementKeysSize", "Scale of the movement keys",""
@@ -52,10 +52,10 @@ XDOCS_CVAR_DEF("cg_movementKeysSize", "Scale of the movement keys",""
 XDOCS_CVAR_DEF("cg_speedometer", "Configure with the /speedometer command",""
 )
 
-XDOCS_CVAR_DEF("cg_speedometerX", "Horizontal location of the speedometer onscreen",""
+XDOCS_CVAR_DEF("cg_speedometerX", "Horizontal location of the speedometer",""
 )
 
-XDOCS_CVAR_DEF("cg_soeedometerY", "Vertical location of the speedometer onscreen",""
+XDOCS_CVAR_DEF("cg_speedometerY", "Vertical location of the speedometer",""
 )
 
 XDOCS_CVAR_DEF("cg_speedometerSize", "Scale of the speedometer",""
@@ -74,7 +74,9 @@ XDOCS_CVAR_DEF("cg_drawTeamOverlayY", "Vertical location of the team overlay",
 
 XDOCS_CVAR_DEF("cg_raceTimer", "Show the race timer onscreen",
 	SETTING("0", "Race timer is hidden") NL
-	SETTING("1", "Race timer is shown")
+	SETTING("1", "Race timer is shown") NL
+	SETTING("2", "Race timer is shown with average and max speed") NL
+	SETTING("3", "Race timer is shown with ms, average speed, and max speed")
 )
 
 XDOCS_CVAR_DEF("cg_raceTimerX", "Horizontal location of the race timer onscreen",""
@@ -93,13 +95,16 @@ XDOCS_CVAR_DEF("cg_smallScoreboard", "Always use the small version of the scoreb
 
 XDOCS_CVAR_DEF("cg_scoreDeaths", "Display score AND deaths on the scoreboard",
 	"This does not work on base." NL
-	SETTING("0", "Scoreboard only shows score (Base behavior)") NL
-	SETTING("1", "Scoreboard shows score and deaths")
+	SETTING("0", "Scoreboard only shows score (Base JAMP behavior)") NL
+	SETTING("1", "Scoreboard shows score and deaths on JA+ or jaPRO servers (default)") NL
+	SETTING("2", "Scoreboard shows score and locally counted deaths")
 )
 
 XDOCS_CVAR_DEF("cg_killMessage", "Print a kill message on the screen when you kill someone",
 	SETTING("0", "Kill messages won't be printed") NL
-	SETTING("1", "Kill messages will be printed")
+	SETTING("1", "Kill messages will be printed, showing score and placement in FFA mode (Base behavior)") NL
+	SETTING("2", "Kill messages will be printed, without score or current place in FFA mode") NL
+	SETTING("3", "Kill messages will be placed higher on the screen than normal")
 )
 
 XDOCS_CVAR_DEF("cg_newFont", "Uses a different font for the chat",
@@ -107,10 +112,25 @@ XDOCS_CVAR_DEF("cg_newFont", "Uses a different font for the chat",
 	SETTING("1", "Use the new font")
 )
 
+XDOCS_CVAR_DEF("cg_chatBoxShowHistory", "Allows showing message history in chatbox when console is open",
+	SETTING("0", "Enabled") NL
+	SETTING("1", "Disabled (baseJKA behavior)")
+)
+
+XDOCS_CVAR_DEF("cg_teamChatsOnly", "Hide non-team chat messages",
+	"Ignored messages will only be printed in the console." NL
+	SETTING("0", "Show all chat") NL
+	SETTING("1", "Hide global chat from all players") NL
+	SETTING("2", "Hide global chat from spectators while you are in-game (requires compatible server mod)")
+)
+
 XDOCS_CVAR_DEF("cg_chatBoxFontSize", "Scale of the chat box font",""
 )
 
-XDOCS_CVAR_DEF("cg_chatBoxCutOffLength", "Length of chat box before starting a new line",""
+XDOCS_CVAR_DEF("cg_chatBoxCutOffLength", "Width of a line in the chatbox before breaking to a new one",
+	SETTING("350", "jaPRO cutoff length") NL
+	SETTING("550", "baseJKA default") NL
+	SETTING("640", "Maximum")
 )
 
 XDOCS_CVAR_DEF("cg_crossHairRed", "Custom red color of the crosshair",""
@@ -177,19 +197,35 @@ XDOCS_CVAR_DEF("cg_jumpSounds", "Play sound when players jump",
 	SETTING("3", "Play only when local client jumps")
 )
 
-XDOCS_CVAR_DEF("cg_chatSounds", "Play sound when chat messages appear",
+XDOCS_CVAR_DEF("cg_chatSounds", "Play sound when chat messages are received",
 	SETTING("0", "Don't play chat sounds") NL
-	SETTING("1", "Play chat sounds")
+	SETTING("1", "Play chat sounds for all messages") NL
+	SETTING("2", "Play chat sounds for private and team messages only")
 )
 
-XDOCS_CVAR_DEF("cg_hitSounds", "Play sound when you hit someone",
+XDOCS_CVAR_DEF("cg_hitSounds", "Play a sound when you hit someone",
 	SETTING("0", "Don't play the hit sound (Base behavior)") NL
-	SETTING("1", "Play the hit sound")
+	SETTING("1", "Play the hit sound from Quake 3: Arena") NL
+	SETTING("2", "Play the hit sound from Legions: Overdrive") NL
+	SETTING("3", "Play the hit sound from Warsow") NL
+	SETTING("4", "Play the hit sound from Tribes: Ascend")
 )
 
 XDOCS_CVAR_DEF("cg_raceSounds", "Play sound when race is started",
 	SETTING("0", "Don't play race sound") NL
 	SETTING("1", "Play race sounds")
+)
+
+XDOCS_CVAR_DEF("cg_duelSounds", "Enables/disables announcer/center print at the start of private duels",
+			   SETTING("0", "Do not announce the start of duel") NL
+			   SETTING("1", "Announce and center print \"BEGIN\" (baseJKA behavior)") NL
+			   SETTING("2", "Announce, but do not center print") NL
+			   SETTING("3", "Center print, but do not announce")
+)
+
+XDOCS_CVAR_DEF("cg_duelMusic", "Enables special in-game music for private duels",
+			SETTING("0", "Use map music while in private duels") NL
+			SETTING("1", "Play music track for private duels (baseJKA behavior)")
 )
 
 //Visuals
@@ -246,7 +282,8 @@ XDOCS_CVAR_DEF("cg_noFX", "Determines if effects and map models are shown",
 	SETTING("1", "Removes effects") NL
 	SETTING("2", "Removes effects and speakers") NL
 	SETTING("3", "Removes above and replaces misc map models") NL
-	SETTING("4", "Removes effects, speakers, and misc map models")
+	SETTING("4", "Removes effects, speakers, and misc map models") NL
+	SETTING("5", "Completely disables all scheduled FX")
 )
 
 XDOCS_CVAR_DEF("cg_noTeleFX", "Disables the teleportation effect",
@@ -255,6 +292,20 @@ XDOCS_CVAR_DEF("cg_noTeleFX", "Disables the teleportation effect",
 	SETTING("1", "Teleport effect is off")
 )
 
+XDOCS_CVAR_DEF("g_gametype", "Gametype that the server is currently on",
+	SETTING("0", "FFA") NL
+	SETTING("1", "Holocron") NL
+	SETTING("2", "Jedi Master") NL
+	SETTING("3", "Duel") NL
+	SETTING("4", "Powerduel") NL
+	SETTING("5", "SP FFA") NL
+	SETTING("6", "TFFA") NL
+	SETTING("7", "Siege") NL
+	SETTING("8", "CTF") NL
+	SETTING("9", "CTY")
+)
+
+//Work from above this line
 
 // ...
 

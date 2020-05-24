@@ -57,6 +57,7 @@ char	*cg_customSoundNames[MAX_CUSTOM_SOUNDS] = {
 	"*gasp",
 	"*land1",
 	"*taunt",
+	"*roll",
 	NULL
 };
 
@@ -947,6 +948,9 @@ void CG_LoadCISounds(clientInfo_t *ci, qboolean modelloaded, qboolean isDefaultM
 				ci->sounds[i] = trap->S_RegisterSound( va("sound/%s/%s", DEFAULT_MALE_SOUNDPATH, soundName) );
 			}
 		}
+
+		if (!ci->sounds[i] && i == 15) //"*roll"
+			ci->sounds[i] = ci->sounds[3]; //fallback to jumpsound if model doesn't have a custom roll sound
 	}
 
 	if (cgs.gametype >= GT_TEAM || com_buildScript.integer)
@@ -1038,7 +1042,7 @@ void CG_LoadCISounds(clientInfo_t *ci, qboolean modelloaded, qboolean isDefaultM
 	trap->S_Shutup(qfalse);
 }
 
-static char* defaultModelTable[] = {
+static char *defaultModelTable[] = {
 	{ "luke" },
 	{ "jedi_rm" },
 	{ "jedi_kdm" },
@@ -1052,7 +1056,7 @@ static char* defaultModelTable[] = {
 };
 static const int MAX_DEFAULT_MODELS = ARRAY_LEN(defaultModelTable);
 
-static char* defaultFemaleModelTable[] = {
+static char *defaultFemaleModelTable[] = {
 	{ "alora" },
 	{ "alora2" },
 	{ "jedi_hf" },
@@ -1064,14 +1068,14 @@ static char* defaultFemaleModelTable[] = {
 };
 static const int MAX_DEFAULT_FEMALE_MODELS = ARRAY_LEN(defaultFemaleModelTable);
 
-static char* defaultSkinTable[] = {
+static char *defaultSkinTable[] = {
 	{ "default" },
 	{ "red" },
 	{ "blue" },
 };
 static const int MAX_DEFAULT_SKINS = ARRAY_LEN(defaultSkinTable);
 
-static char* jadenFemaleTwilekHeadTable[] = {
+static char *jadenFemaleTwilekHeadTable[] = {
 	{ "head_a1" },
 	{ "head_a2" },
 	//{ "head_a3" }, //no
@@ -1083,14 +1087,14 @@ static char* jadenFemaleTwilekHeadTable[] = {
 };
 static const int MAX_JADENTF_HEADS = ARRAY_LEN(jadenFemaleTwilekHeadTable);
 
-static char* jadenFemaleHeadTable[] = {
+static char *jadenFemaleHeadTable[] = {
 	{ "head_a1" },
 	{ "head_b1" },
 	{ "head_c1" },
 };
 static const int MAX_JADENF_HEADS = ARRAY_LEN(jadenFemaleHeadTable);
 
-static char* jadenFemaleTorsoTable[] = {
+static char *jadenFemaleTorsoTable[] = {
 	{ "torso_a1" },
 	{ "torso_b1" },
 	{ "torso_c1" },
@@ -1101,7 +1105,7 @@ static char* jadenFemaleTorsoTable[] = {
 };
 static const int MAX_JADENF_TORSOS = ARRAY_LEN(jadenFemaleTorsoTable);
 
-static char* jadenFemaleLowerTable[] = {
+static char *jadenFemaleLowerTable[] = {
 	{ "lower_a1" },
 	{ "lower_b1" },
 	{ "lower_c1" },
@@ -1110,7 +1114,7 @@ static char* jadenFemaleLowerTable[] = {
 };
 static const int MAX_JADENF_LOWERS = ARRAY_LEN(jadenFemaleLowerTable);
 
-static char* jadenMaleHumanHeadTable[] = {
+static char *jadenMaleHumanHeadTable[] = {
 	{ "head_a1" },
 	{ "head_a2" },
 	{ "head_b1" },
@@ -1119,14 +1123,14 @@ static char* jadenMaleHumanHeadTable[] = {
 };
 static const int MAX_JADENHM_HEADS = ARRAY_LEN(jadenMaleHumanHeadTable);
 
-static char* jadenMaleHeadTable[] = {
+static char *jadenMaleHeadTable[] = {
 	{ "head_a1" },
 	{ "head_b1" },
 	{ "head_c1" },
 };
 static const int MAX_JADENM_HEADS = ARRAY_LEN(jadenMaleHeadTable);
 
-static char* jadenMaleHumanTorsoTable[] = {
+static char *jadenMaleHumanTorsoTable[] = {
 	{ "torso_a1" },
 	{ "torso_b1" },
 	{ "torso_c1" },
@@ -1137,7 +1141,7 @@ static char* jadenMaleHumanTorsoTable[] = {
 };
 static const int MAX_JADENHM_TORSOS = ARRAY_LEN(jadenMaleHumanTorsoTable);
 
-static char* jadenMaleTorsoTable[] = {
+static char *jadenMaleTorsoTable[] = {
 	{ "torso_a1" },
 	{ "torso_b1" },
 	{ "torso_c1" },
@@ -1147,7 +1151,7 @@ static char* jadenMaleTorsoTable[] = {
 };
 static const int MAX_JADENM_TORSOS = ARRAY_LEN(jadenMaleTorsoTable);
 
-static char* jadenMaleLowerTable[] = {
+static char *jadenMaleLowerTable[] = {
 	{ "lower_a1" },
 	{ "lower_b1" },
 	{ "lower_c1" },
@@ -1756,7 +1760,9 @@ void CG_NewClientInfo( int clientNum, qboolean entitiesInitialized ) {
 	const char	*configstring;
 	const char	*v;
 	const char	*yo;//rgb
-	char		*slash;
+	char		*slash = NULL;
+	char		saber1[MAX_QPATH] = {0}, saber2[MAX_QPATH] = {0};
+	int			parsed = 0;
 	void *oldGhoul2;
 	void *oldG2Weapons[MAX_SABERS];
 	int i = 0;
@@ -1839,11 +1845,20 @@ void CG_NewClientInfo( int clientNum, qboolean entitiesInitialized ) {
 	v = Info_ValueForKey( configstring, "t" );
 	newInfo.team = atoi( v );
 
+	newInfo.deaths = 0;
+	if (ci) {
+		if (newInfo.team != ci->team)
+			newInfo.deaths = 0; //reset their death count if they switched teams
+		else
+			newInfo.deaths = ci->deaths;
+	}
+
 	// copy team info out to menu
-	if ( clientNum == cg.clientNum)	//this is me
+	if ( clientNum == cg.clientNum )	//this is me
 	{
 		trap->Cvar_Set("ui_team", v);
-		trap->Cvar_Set("ui_myteam", v); //?
+		trap->Cvar_Set("ui_myteam", v);
+		trap->Cvar_Update(&ui_myteam);
 	}
 
 	// rgb
@@ -1881,7 +1896,9 @@ void CG_NewClientInfo( int clientNum, qboolean entitiesInitialized ) {
 	newInfo.cosmetics = atoi(yo);
 
 	// Gender hints
-	if ( (v = Info_ValueForKey( configstring, "ds" )) )
+	newInfo.gender = GENDER_MALE; //reset this so default/missing models don't inherit it from deferred userinfo
+	v = Info_ValueForKey(configstring, "ds");
+	if ( v )
 	{
 		if ( *v == 'f' )
 			newInfo.gender = GENDER_FEMALE;
@@ -1933,7 +1950,7 @@ void CG_NewClientInfo( int clientNum, qboolean entitiesInitialized ) {
 		if ((newInfo.team != cg.predictedPlayerState.persistant[PERS_TEAM] || cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_FREE) && strlen(cg_forceEnemyModel.string) && Q_stricmp(cg_forceEnemyModel.string, "0") && Q_stricmp(cg_forceEnemyModel.string, "none"))
 		{
 			if (clientNum != cg.clientNum)	//this is me
-			Q_strncpyz( newInfo.modelName, cg_forceEnemyModel.string, sizeof(newInfo.modelName));
+				Q_strncpyz( newInfo.modelName, cg_forceEnemyModel.string, sizeof(newInfo.modelName));
 		}
 		else if (newInfo.team == cg.predictedPlayerState.persistant[PERS_TEAM] && cg.predictedPlayerState.persistant[PERS_TEAM] != TEAM_FREE && strlen(cg_forceAllyModel.string) && Q_stricmp(cg_forceAllyModel.string, "0") && Q_stricmp(cg_forceAllyModel.string, "none"))
 		{
@@ -1942,8 +1959,6 @@ void CG_NewClientInfo( int clientNum, qboolean entitiesInitialized ) {
 		}
 	}
 	//loda
-	
-	
 	else {
 		Q_strncpyz( newInfo.modelName, v, sizeof( newInfo.modelName ) );
 
@@ -1955,6 +1970,12 @@ void CG_NewClientInfo( int clientNum, qboolean entitiesInitialized ) {
 			Q_strncpyz( newInfo.skinName, slash + 1, sizeof( newInfo.skinName ) );
 			// truncate modelName
 			*slash = 0;
+
+			//check skin name for a trailing slash or something
+			slash = strrchr(newInfo.skinName, '/');
+			if (slash) {
+				*slash = 0;
+			}
 		}
 	}
 
@@ -2015,6 +2036,13 @@ void CG_NewClientInfo( int clientNum, qboolean entitiesInitialized ) {
 	//saber being used
 	v = Info_ValueForKey( configstring, "st" );
 
+	if (clientNum == cg.clientNum && strlen(cg_forceOwnSaber.string) && Q_stricmp(cg_forceOwnSaber.string, "none"))
+	{
+		parsed = sscanf(cg_forceOwnSaber.string, "%s %s", saber1, saber2);
+		if (parsed > 0 && saber1 && saber1[0] && Q_stricmp(saber1, "none"))
+			v = saber1;
+	}
+
 	if (v && Q_stricmp(v, ci->saberName))
 	{
 		Q_strncpyz( newInfo.saberName, v, 64 );
@@ -2028,7 +2056,17 @@ void CG_NewClientInfo( int clientNum, qboolean entitiesInitialized ) {
 		newInfo.ghoul2Weapons[0] = ci->ghoul2Weapons[0];
 	}
 
+	if (newInfo.saber[0].soundLoop == trap->S_RegisterSound("sound/weapons/saber/saberhum4.wav")) {//probably a base hilt
+		newInfo.saber[0].soundLoop = cgs.media.saberHumSounds[clientNum % 5]; //JAPRO - Clientside - Use all saber hum sounds found in base assets
+	}
+
 	v = Info_ValueForKey( configstring, "st2" );
+
+	if (clientNum == cg.clientNum && parsed == 2)
+	{
+		if (saber2 && saber2[0] && Q_stricmp(saber2, "none"))
+			v = saber2;
+	}
 
 	if (v && Q_stricmp(v, ci->saber2Name))
 	{
@@ -2041,6 +2079,10 @@ void CG_NewClientInfo( int clientNum, qboolean entitiesInitialized ) {
 		Q_strncpyz( newInfo.saber2Name, ci->saber2Name, 64 );
 		memcpy(&newInfo.saber[1], &ci->saber[1], sizeof(newInfo.saber[1]));
 		newInfo.ghoul2Weapons[1] = ci->ghoul2Weapons[1];
+	}
+
+	if (newInfo.saber[0].soundLoop == trap->S_RegisterSound("sound/weapons/saber/saberhum4.wav")) {//probably a base hilt
+		newInfo.saber[0].soundLoop = cgs.media.saberHumSounds[clientNum % 5]; //JAPRO - Clientside - Use all saber hum sounds found in base assets
 	}
 
 	if (saberUpdate[0] || saberUpdate[1])
@@ -2321,6 +2363,10 @@ static void _PlayerFootStep( const vec3_t origin,
 	// send a trace down from the player to the ground
 	VectorCopy( origin, end );
 	end[2] -= FOOTSTEP_DISTANCE;
+
+	trap->CM_Trace(&trace, origin, end, mins, maxs, 0, MASK_WATER, 0); //check if we're standing in water first
+	if (trace.fraction < 1.0f)
+		return;
 
 	trap->CM_Trace( &trace, origin, end, mins, maxs, 0, MASK_PLAYERSOLID, 0);
 
@@ -4376,6 +4422,85 @@ static void CG_G2SetHeadAnim( centity_t *cent, int anim )
 	}
 }
 
+/*
+===============
+CG_BreathPuffs
+===============
+Description: Makes the player appear to have breath puffs (from the cold).
+Added 11/06/02 by Aurelio Reis.
+Ported to MP 01/14/2019
+*/
+//extern vmCvar_t	cg_drawBreath;
+static void CG_BreathPuffs( centity_t *cent, vec3_t angles, vec3_t origin )
+{
+	clientInfo_t *ci = &cgs.clientinfo[cent->currentState.number];
+
+	/*	cg_drawBreath.integer	== 0 - Don't draw at all.
+								== 1 - Draw both (but bubbles only when under water).
+								== 2 - Draw only cold breath.
+								== 3 - Draw only under water bubbles (when under water)	*/
+
+	if ( !cg.snap || (cent->currentState.eFlags & EF_DEAD) )
+	{
+		return;
+	}
+	
+	if (ci->breathPuffTime > cg.time) {
+		return;
+	}
+
+	//Update these here incase we don't have a head_front bolt.
+	// TODO: It'd be nice if they breath faster when they're more damaged or when running...
+	if (trap->S_GetVoiceVolume(cent->currentState.number) > 0)
+	{//make breath when talking
+		ci->breathPuffTime = cg.time + 300; // every 200 ms
+		ci->breathTime = cg.time + 150;
+	}
+	else
+	{
+		ci->breathPuffTime = cg.time + 3000; // every 3 seconds.
+		ci->breathTime = cg.time + 1500;
+	}
+
+	if (cg_stylePlayer.integer & JAPRO_STYLE_DISABLEBREATHING)
+		return;
+
+	if (cent->currentState.clientNum == cg.predictedPlayerState.clientNum && !cg.renderingThirdPerson) {
+		return;
+	}
+
+	// Get the head-front bolt/tag.
+	int bolt = trap->G2API_AddBolt( cent->ghoul2, 0, "*head_front" );
+	if ( bolt == -1 )
+	{
+		return;
+	}
+
+	vec3_t vEffectOrigin;
+	mdxaBone_t	boltMatrix;
+	trap->G2API_GetBoltMatrix( cent->ghoul2, 0, bolt, &boltMatrix, angles, origin, cg.time, cgs.gameModels, cent->modelScale );
+	BG_GiveMeVectorFromMatrix(&boltMatrix, ORIGIN, vEffectOrigin);
+
+	int contents = cg.refdef.viewContents;
+	if ( contents & ( CONTENTS_SLIME | CONTENTS_LAVA ) )	// If they're submerged in something bad, leave.
+	{
+		return;
+	}
+
+	// Show bubbles effect if we're under water.
+	//if ( (contents & CONTENTS_WATER) && ( cg_drawBreath.integer == 1 || cg_drawBreath.integer == 3 ) )
+	if (contents & CONTENTS_WATER)
+	{
+		trap->FX_PlayBoltedEffectID(cgs.effects.waterBreath, vEffectOrigin, cent->ghoul2, bolt, cent->currentState.clientNum, 0, -1, qfalse);
+	}
+	// Draw cold breath effect.
+	//else if ( (cg_drawBreath.integer == 1 || cg_drawBreath.integer == 2)) || cg_drawBreath.integer == -1 )
+	else if (cg.coldBreathEffects)
+	{
+		trap->FX_PlayBoltedEffectID(cgs.effects.breath, vEffectOrigin, cent->ghoul2, bolt, cent->currentState.clientNum, 0, -1, qtrue);
+	}
+}
+
 qboolean CG_G2PlayerHeadAnims( centity_t *cent )
 {
 	clientInfo_t *ci = NULL;
@@ -4508,7 +4633,7 @@ qboolean CG_G2PlayerHeadAnims( centity_t *cent )
 	return qfalse;
 }
 
-
+extern int cgFPLSState;
 static void CG_G2PlayerAngles( centity_t *cent, matrix3_t legs, vec3_t legsAngles)
 {
 	clientInfo_t *ci;
@@ -4550,16 +4675,37 @@ static void CG_G2PlayerAngles( centity_t *cent, matrix3_t legs, vec3_t legsAngle
 		vec3_t lookAngles;
 		entityState_t *emplaced = NULL;
 
-		if (cent->currentState.hasLookTarget && cg_headTurn.integer && !(cent->pe.torso.animationNumber == BOTH_STAND1IDLE1)) //|| cent->pe.torso.animationNumber == BOTH_STAND2IDLE1 || cent->pe.torso.animationNumber ==BOTH_STAND2IDLE2
+		if (cent->currentState.hasLookTarget && cg_headTurn.integer &&
+			cent->currentState.torsoAnim != BOTH_STAND1IDLE1 && cent->currentState.torsoAnim != BOTH_STAND2IDLE1 && cent->currentState.torsoAnim != BOTH_STAND2IDLE2 &&
+			cent->currentState.torsoAnim != BOTH_STAND3IDLE1 && cent->currentState.torsoAnim != BOTH_STAND5IDLE1 && cent->currentState.torsoAnim != BOTH_STAND9IDLE1 && //don't turn head while in idle animation
+			!(cg.snap->ps.duelInProgress && cent->currentState.clientNum == cg.snap->ps.clientNum && cent->currentState.lookTarget != cg.snap->ps.duelIndex)) //don't turn our head towards other people while we're dueling
 		{
 			VectorSubtract(cg_entities[cent->currentState.lookTarget].lerpOrigin, cent->lerpOrigin, lookAngles);
 			vectoangles(lookAngles, lookAngles);
-			ci->lookTime = cg.time + 1000;
+			ci->lookTime = cg.time + (cg_headTurn.integer * 1000);
 		}
 		else
 		{
 			VectorCopy(cent->lerpAngles, lookAngles);
 		}
+
+		if (!(cg_stylePlayer.integer & JAPRO_STYLE_DISABLEBREATHING) && cent->currentState.eType == ET_PLAYER && !(cent->currentState.eFlags & EF_DEAD))
+		{
+			CG_BreathPuffs(cent, cent->lerpAngles, cent->currentState.origin);
+
+			if (cent->currentState.torsoAnim < BOTH_ATTACK1 || cent->currentState.torsoAnim > BOTH_ROLL_STAB ||
+				(cent->currentState.torsoAnim >= BOTH_SABERFAST_STANCE && cent->currentState.torsoAnim <= BOTH_SABERSTAFF_STANCE))
+			{ //not attacking
+				if ((ci->breathTime - cg.time) < 0) {
+					cent->lerpAngles[PITCH] += (float)(ci->breathTime - cg.time) * 0.0025f;
+				}
+				else {
+					cent->lerpAngles[PITCH] -= (float)(ci->breathTime - cg.time) * 0.0025f;
+				}
+			}
+		}
+
+	if (!(cgFPLSState && cent->currentState.clientNum == cg.predictedPlayerState.clientNum))
 		lookAngles[PITCH] = 0;
 
 		if (cent->currentState.otherEntityNum2)
@@ -4921,7 +5067,7 @@ Returns the Z component of the surface being shadowed
   should it return a full plane instead of a Z?
 ===============
 */
-#define	SHADOW_DISTANCE		128
+#define	SHADOW_DISTANCE		512
 static qboolean CG_PlayerShadow( centity_t *cent, float *shadowPlane ) {
 	vec3_t		end, mins = {-15, -15, 0}, maxs = {15, 15, 2};
 	trace_t		trace;
@@ -5536,7 +5682,7 @@ void ParseRGBSaber( char *str, vec3_t c ) {
 //rgb
 
 qboolean pluginNoBlackSabers() {
-	if (cgs.isJAPlus || cgs.isJAPro) {
+	if (cgs.serverMod >= SVMOD_JAPLUS) {
 		if (!(cp_pluginDisable.integer & JAPRO_PLUGIN_BLACKSABERSDISABLE))
 			return qfalse;
 	}
@@ -5550,12 +5696,12 @@ static int ClampSaberColor(int color) {
 	if (color == SABER_BLACK)
 		return (pluginNoBlackSabers() || cg_noRGBSabers.integer) ? SABER_ORANGE : SABER_BLACK;
 
-	if (color > SABER_PURPLE && (cg_noRGBSabers.integer || (!cgs.isJAPlus && !cgs.isJAPro))) {
+	if (color > SABER_PURPLE && (cg_noRGBSabers.integer || cgs.serverMod < SVMOD_JAPLUS)) {
 		if (disco.integer)
 			color = Q_irand(0, 5);
-		else if (color >= SABER_RGB && cg_noRGBSabers.integer > 1 && (cgs.isJAPlus || cgs.isJAPro))
+		else if (color >= SABER_RGB && cg_noRGBSabers.integer > 1 && cgs.serverMod >= SVMOD_JAPLUS)
 			color = SABER_RGB;
-		else if (color > SABER_PURPLE && (cg_noRGBSabers.integer || (!cgs.isJAPlus && !cgs.isJAPro)))
+		else if (color > SABER_PURPLE && (cg_noRGBSabers.integer || cgs.serverMod < SVMOD_JAPLUS))
 			color -= SABER_RGB; //roll over to a normal base color?
 	}
 
@@ -5564,9 +5710,11 @@ static int ClampSaberColor(int color) {
 
 static void CG_RGBForSaberColor( saber_colors_t color, vec3_t rgb, int cnum, int bnum ) //rgb
 {
-
-	if (color > SABER_PURPLE)
-		color = ClampSaberColor(color);
+	clientInfo_t *ci = &cgs.clientinfo[cnum];
+#if NEW_SABER_PARMS
+	if (ci->saber[bnum].useCustomRGBColor)
+		color = SABER_RGB;
+#endif
 		
 	switch( color )
 	{
@@ -5592,13 +5740,18 @@ static void CG_RGBForSaberColor( saber_colors_t color, vec3_t rgb, int cnum, int
 			VectorSet( rgb, 1.0f, 1.0f, 1.0f );
 			break;
 		case SABER_RGB:
+#if NEW_SABER_PARMS
+			if (ci->saber[bnum].useCustomRGBColor) {
+				VectorSet(rgb, ci->saber[bnum].customRGB[0], ci->saber[bnum].customRGB[1], ci->saber[bnum].customRGB[2]);
+				break;
+			}
+#endif
 		case SABER_FLAME1:
 		case SABER_ELEC1:
 		case SABER_FLAME2:
 		case SABER_ELEC2:
 			if ( cnum < MAX_CLIENTS ) {
 				int i;
-				clientInfo_t *ci = &cgs.clientinfo[cnum];
 
 				if ( bnum == 0 )
 					VectorCopy( ci->rgb1, rgb );
@@ -5724,9 +5877,6 @@ void CG_DoSaber( vec3_t origin, vec3_t dir, float length, float lengthMax, float
 	// Find the midpoint of the saber for lighting purposes
 	VectorMA( origin, length * 0.5f, dir, mid );
 
-	if (color > SABER_PURPLE)
-		color = ClampSaberColor(color);
-
 	switch( color )
 	{
 		case SABER_RED:
@@ -5786,6 +5936,13 @@ void CG_DoSaber( vec3_t origin, vec3_t dir, float length, float lengthMax, float
 			break;
 	}
 
+#if NEW_SABER_PARMS
+	if (cgs.clientinfo[cnum].saber[bnum].customBladeShader)
+		blade = cgs.clientinfo[cnum].saber[bnum].customBladeShader;
+	if (cgs.clientinfo[cnum].saber[bnum].customGlowShader)
+		glow = cgs.clientinfo[cnum].saber[bnum].customGlowShader;
+#endif
+
 	if (doLight)
 	{	// always add a light because sabers cast a nice glow before they slice you in half!!  or something...
 		float light = length*1.4f + Q_flrand(0.0f, 1.0f)*3.0f; //rgb
@@ -5793,7 +5950,7 @@ void CG_DoSaber( vec3_t origin, vec3_t dir, float length, float lengthMax, float
 		trap->R_AddLightToScene( mid, light, rgb[0], rgb[1], rgb[2] ); //rgb
 	}
 
-	memset( &saber, 0, sizeof( refEntity_t ));
+	Com_Memset( &saber, 0, sizeof( refEntity_t ));
 
 	// Saber glow is it's own ref type because it uses a ton of sprites, otherwise it would eat up too many
 	//	refEnts to do each glow blob individually
@@ -5865,27 +6022,27 @@ void CG_DoSaber( vec3_t origin, vec3_t dir, float length, float lengthMax, float
 
 	if ( color >= SABER_RGB ) {
 		switch ( color ) {
-		default:
-		case SABER_RGB:
-			sbak.customShader = cgs.media.rgbSaberCoreShader;
-			break;
+			default:
+			case SABER_RGB:
+				sbak.customShader = cgs.media.rgbSaberCoreShader;
+				break;
 #if _SHITTYLINEFX
-		case SABER_FLAME1:
-			sbak.customShader = cgs.media.rgbSaberCore2Shader;
-			break;
-		case SABER_ELEC1:
-			sbak.customShader = cgs.media.rgbSaberCore3Shader;
-			break;
-		case SABER_FLAME2:
-			sbak.customShader = cgs.media.rgbSaberCore4Shader;
-			break;
-		case SABER_ELEC2:
-			sbak.customShader = cgs.media.rgbSaberCore5Shader;
-			break;
+			case SABER_FLAME1:
+				sbak.customShader = cgs.media.rgbSaberCore2Shader;
+				break;
+			case SABER_ELEC1:
+				sbak.customShader = cgs.media.rgbSaberCore3Shader;
+				break;
+			case SABER_FLAME2:
+				sbak.customShader = cgs.media.rgbSaberCore4Shader;
+				break;
+			case SABER_ELEC2:
+				sbak.customShader = cgs.media.rgbSaberCore5Shader;
+				break;
 #endif
-		case SABER_BLACK:
-			sbak.customShader = cgs.media.blackSaberCoreShader;
-			break;
+			case SABER_BLACK:
+				sbak.customShader = cgs.media.blackSaberCoreShader;
+				break;
 		}
 	}
 
@@ -5898,7 +6055,7 @@ void CG_DoSaber( vec3_t origin, vec3_t dir, float length, float lengthMax, float
 	//rgb
 }
 
-void CG_DoSFXSaber( vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, vec3_t trail_muz, float lengthMax, float radius, saber_colors_t color, int rfx, qboolean doLight, qboolean doTrail, int cnum, int bnum ) {
+void CG_DoSFXSaber( vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, vec3_t trail_muz, float lengthMax, float radius, saber_colors_t color, int rfx, qboolean doLight, int cnum, int bnum ) {
 	vec3_t	dif, mid, blade_dir, end_dir, trail_dir, base_dir, rgb;
 	float radiusmult, effectradius, coreradius, effectalpha, AngleScale, blade_len, end_len, trail_len, base_len, DisTip, DisMuz, DisDif, glowscale = 0.5f, v1, v2, len, pulse;
 	int i;
@@ -5923,65 +6080,54 @@ void CG_DoSFXSaber( vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, vec3_t
 	VectorNormalize( end_dir );
 	VectorNormalize( base_dir );
 
-	if (color > SABER_PURPLE)
-		color = ClampSaberColor(color);
-
 	switch ( color ) {
-	case SABER_RED:
-		glow = cgs.media.redSaberGlowShader;
-		break;
-
-	case SABER_ORANGE:
-		glow = cgs.media.orangeSaberGlowShader;
-		break;
-
-	case SABER_YELLOW:
-		glow = cgs.media.yellowSaberGlowShader;
-		break;
-
-	case SABER_GREEN:
-		glow = cgs.media.greenSaberGlowShader;
-		break;
-
-	case SABER_PURPLE:
-		glow = cgs.media.purpleSaberGlowShader;
-		break;
-
+		case SABER_RED:
+			glow = cgs.media.redSaberGlowShader;
+			break;
+		case SABER_ORANGE:
+			glow = cgs.media.orangeSaberGlowShader;
+			break;
+		case SABER_YELLOW:
+			glow = cgs.media.yellowSaberGlowShader;
+			break;
+		case SABER_GREEN:
+			glow = cgs.media.greenSaberGlowShader;
+			break;
+		case SABER_PURPLE:
+			glow = cgs.media.purpleSaberGlowShader;
+			break;
 		//	case SABER_WHITE:
-	case SABER_RGB:
-		glow = cgs.media.rgbSaberGlowShader;
-		break;
-
-	case SABER_FLAME1:
-		glow = cgs.media.rgbSaberGlow2Shader;
-		break;
-
-	case SABER_ELEC1:
-		glow = cgs.media.rgbSaberGlow3Shader;
-		break;
-
-	case SABER_FLAME2:
-		glow = cgs.media.rgbSaberGlow4Shader;
-		break;
-
-	case SABER_ELEC2:
-		glow = cgs.media.rgbSaberGlow5Shader;
-		break;
-
-	case SABER_BLACK:
-		glow = cgs.media.blackSaberGlowShader;
-		doLight = qfalse;
-		break;
-
-	default:
-		glow = cgs.media.blueSaberGlowShader;
-		break;
+		case SABER_RGB:
+			glow = cgs.media.rgbSaberGlowShader;
+#if NEW_SABER_PARMS
+			if (cgs.clientinfo[cnum].saber[bnum].customGlowShader)
+				glow = cgs.clientinfo[cnum].saber[bnum].customGlowShader;
+#endif
+			break;
+		case SABER_FLAME1:
+			glow = cgs.media.rgbSaberGlow2Shader;
+			break;
+		case SABER_ELEC1:
+			glow = cgs.media.rgbSaberGlow3Shader;
+			break;
+		case SABER_FLAME2:
+			glow = cgs.media.rgbSaberGlow4Shader;
+			break;
+		case SABER_ELEC2:
+			glow = cgs.media.rgbSaberGlow5Shader;
+			break;
+		case SABER_BLACK:
+			glow = cgs.media.blackSaberGlowShader;
+			doLight = qfalse;
+			break;
+		default:
+			glow = cgs.media.blueSaberGlowShader;
+			break;
 	}
 
 	VectorMA( blade_muz, blade_len * 0.5f, blade_dir, mid );
 
 	if ( doLight ) {
-		//CG_RGBForSaberColor(saber->blade[i], rgbs[i], cnum, bnum);
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
 		trap->R_AddLightToScene(mid, (blade_len*2.0f) + (Q_flrand(0.0f, 1.0f)*10.0f), rgb[0], rgb[1], rgb[2]);
@@ -6039,24 +6185,21 @@ void CG_DoSFXSaber( vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, vec3_t
 	if ( AngleScale < 0.4f )
 		AngleScale = 0.4f;
 
-	memset( &saber, 0, sizeof(refEntity_t) );
+	Com_Memset( &saber, 0, sizeof(refEntity_t) );
 
 	if ( blade_len < lengthMax )
 		radiusmult = 0.5f + ((blade_len / lengthMax) / 2);
 	else
 		radiusmult = 1.0f;
-	//RAZTODO: cvar for radiusmult
 	
 	pulse = Q_fabs(sinf((float)cg.time / 25.0f)) * 0.25f;
 
 	effectradius = ((radius * 1.6f * v1) + Q_flrand(-1.0f, 1.0f) * 0.1f)*radiusmult;
 	coreradius = ((radius * 0.4f * v2) + Q_flrand(-1.0f, 1.0f) * 0.1f)*radiusmult;
-	if (cg_saberTrail.integer == 3) {
-		effectradius *= cg_shaderSaberGlow.value;
-		coreradius *= pulse + cg_shaderSaberCore.value;
-	}
+	effectradius *= cg_shaderSaberGlow.value;
+	coreradius *= pulse + cg_shaderSaberCore.value;
 
-	if ( cg_saberTrail.integer == 2 && cg_shadows.integer != 2 && cgs.glconfig.stencilBits >= 4 )
+	if ( cg_shadows.integer != 2 && cgs.glconfig.stencilBits >= 4 )
 		rfx |= RF_FORCEPOST;
 
 	VectorScale( rgb, 255.0f, rgb );
@@ -6213,8 +6356,8 @@ void CG_DoSFXSaber( vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, vec3_t
 		}
 	}
 
-	//	if ( end_len <= 1 )
-	//		return;
+	if (end_len < 0.5f)
+		return;
 
 	VectorSubtract( blade_tip, cg.refdef.vieworg, dif );
 	DisTip = VectorLength( dif );
@@ -6862,7 +7005,7 @@ qboolean BG_SuperBreakWinAnim( int anim );
 
 void CG_AddSaberBlade( centity_t *cent, centity_t *scent, refEntity_t *saber, int renderfx, int modelIndex, int saberNum, int bladeNum, vec3_t origin, vec3_t angles, qboolean fromSaber, qboolean dontDraw)
 {
-	vec3_t	org_, end, v, rgb1, draw_dir,
+	vec3_t	org_, end, v, rgb1,
 			axis_[3] = {{0,0,0}, {0,0,0}, {0,0,0}};	// shut the compiler up
 	trace_t	trace;
 	int i = 0;
@@ -6877,7 +7020,7 @@ void CG_AddSaberBlade( centity_t *cent, centity_t *scent, refEntity_t *saber, in
 	effectTrailArgStruct_t fx;
 	int scolor = 0;
 	int	useModelIndex = 0;
-	qboolean sfxSabers = (cg_saberTrail.integer == 3);
+	qboolean sfxSabers = (cg_saberTrail.integer == 3 || cg_saberTrail.integer == -3);
 
 	if (cent->currentState.eType == ET_NPC)
 	{
@@ -6972,9 +7115,6 @@ void CG_AddSaberBlade( centity_t *cent, centity_t *scent, refEntity_t *saber, in
 		}
 	}
 
-	if (scolor > SABER_PURPLE)
-		scolor = ClampSaberColor(scolor);
-
 	if (cgs.gametype >= GT_TEAM &&
 		cgs.gametype != GT_SIEGE &&
 		!cgs.jediVmerc &&
@@ -6989,6 +7129,14 @@ void CG_AddSaberBlade( centity_t *cent, centity_t *scent, refEntity_t *saber, in
 			scolor = SABER_BLUE;
 		}
 	}
+
+	scolor = ClampSaberColor(scolor);
+
+#if NEW_SABER_PARMS
+	if (client->saber[saberNum].useCustomRGBColor) {
+		scolor = SABER_RGB;
+	}
+#endif
 
 	if (!cg_saberContact.integer)
 	{ //if we don't have saber contact enabled, just add the blade and don't care what it's touching
@@ -7075,9 +7223,14 @@ void CG_AddSaberBlade( centity_t *cent, centity_t *scent, refEntity_t *saber, in
 					{
 						if ( trace.entityNum == ENTITYNUM_WORLD || cg_entities[trace.entityNum].currentState.eType == ET_TERRAIN || (cg_entities[trace.entityNum].currentState.eFlags & EF_PERMANENT) )
 						{//only put marks on architecture
-							// Let's do some cool burn/glowing mark bits!!!
-							CG_CreateSaberMarks( client->saber[saberNum].blade[bladeNum].trail.oldPos[i], trace.endpos, trace.plane.normal );
-
+							float markDistance = Distance(client->saber[saberNum].blade[bladeNum].trail.oldPos[i], trace.endpos);
+							if (markDistance > 8.0f)
+							{ // Let's do some cool burn/glowing mark bits!!!
+								CG_CreateSaberMarks( client->saber[saberNum].blade[bladeNum].trail.oldPos[i], trace.endpos, trace.plane.normal );
+								// stash point so we can connect-the-dots later
+								VectorCopy(trace.endpos, client->saber[saberNum].blade[bladeNum].trail.oldPos[i]);
+								VectorCopy(trace.plane.normal, client->saber[saberNum].blade[bladeNum].trail.oldNormal[i]);
+							}
 							//make a sound
 							if ( cg.time - client->saber[saberNum].blade[bladeNum].hitWallDebounceTime >= 100 )
 							{//ugh, need to have a real sound debouncer... or do this game-side
@@ -7092,12 +7245,11 @@ void CG_AddSaberBlade( centity_t *cent, centity_t *scent, refEntity_t *saber, in
 						client->saber[saberNum].blade[bladeNum].trail.haveOldPos[i] = qtrue;
 		//				CG_ImpactMark( cgs.media.rivetMarkShader, client->saber[saberNum].blade[bladeNum].trail.oldPos[i], client->saber[saberNum].blade[bladeNum].trail.oldNormal[i],
 		//						0.0f, 1.0f, 1.0f, 1.0f, 1.0f, qfalse, 1.1f, qfalse );
+						// stash point so we can connect-the-dots later
+						VectorCopy( trace.endpos, client->saber[saberNum].blade[bladeNum].trail.oldPos[i] );
+						VectorCopy( trace.plane.normal, client->saber[saberNum].blade[bladeNum].trail.oldNormal[i] );
 					}
 				}
-
-				// stash point so we can connect-the-dots later
-				VectorCopy( trace.endpos, client->saber[saberNum].blade[bladeNum].trail.oldPos[i] );
-				VectorCopy( trace.plane.normal, client->saber[saberNum].blade[bladeNum].trail.oldNormal[i] );
 			}
 			else
 			{
@@ -7217,83 +7369,99 @@ CheckTrail:
 						qhandle_t trailShader;//rgb
 #endif
 
+#if NEW_SABER_PARMS
+						if (client->saber[saberNum].useCustomRGBColor) //set if hilt definition has customRGB colors set
+							scolor = SABER_RGB;
+#endif
 						switch( scolor )
 						{
-						case SABER_RED:
-							VectorSet( rgb1, 255.0f, 0.0f, 0.0f );
-							break;
-						case SABER_ORANGE:
-							VectorSet( rgb1, 255.0f, 64.0f, 0.0f );
-							break;
-						case SABER_YELLOW:
-							VectorSet( rgb1, 255.0f, 255.0f, 0.0f );
-							break;
-						case SABER_GREEN:
-							VectorSet( rgb1, 0.0f, 255.0f, 0.0f );
-							break;
-						case SABER_BLUE:
-						default:
-							VectorSet( rgb1, 0.0f, 64.0f, 255.0f );
-							break;
-						case SABER_PURPLE:
-							VectorSet( rgb1, 220.0f, 0.0f, 255.0f );
-							break;
+							case SABER_RED:
+								VectorSet( rgb1, 255.0f, 0.0f, 0.0f );
+								break;
+							case SABER_ORANGE:
+								VectorSet( rgb1, 255.0f, 64.0f, 0.0f );
+								break;
+							case SABER_YELLOW:
+								VectorSet( rgb1, 255.0f, 255.0f, 0.0f );
+								break;
+							case SABER_GREEN:
+								VectorSet( rgb1, 0.0f, 255.0f, 0.0f );
+								break;
+							case SABER_BLUE:
+							default:
+								VectorSet( rgb1, 0.0f, 64.0f, 255.0f );
+								break;
+							case SABER_PURPLE:
+								VectorSet( rgb1, 220.0f, 0.0f, 255.0f );
+								break;
 #if _SHITTYLINEFX
-						case SABER_FLAME1:
-						case SABER_ELEC1:
-						case SABER_FLAME2:
-						case SABER_ELEC2:
+							case SABER_FLAME1:
+							case SABER_ELEC1:
+							case SABER_FLAME2:
+							case SABER_ELEC2:
 #endif
 							//rgb
-						case SABER_RGB:
-						{
-							int cnum = cent->currentState.clientNum;
-							if (cnum < MAX_CLIENTS) {
-								clientInfo_t *ci = &cgs.clientinfo[cnum];
+							case SABER_RGB:
+							{
+								int cnum = cent->currentState.clientNum;
+#if NEW_SABER_PARMS
+								if (client->saber[saberNum].useCustomRGBColor) {//set if hilt definition has customRGB colors set
+									VectorSet(rgb1, client->saber[saberNum].customRGB[0], client->saber[saberNum].customRGB[1], client->saber[saberNum].customRGB[2]);
+									break;
+								}
+#endif
+								if (cnum < MAX_CLIENTS) {
+									clientInfo_t *ci = &cgs.clientinfo[cnum];
 
-								if (saberNum == 0)
-									VectorCopy(ci->rgb1, rgb1);
-								else
-									VectorCopy(ci->rgb2, rgb1);
+									if (saberNum == 0)
+										VectorCopy(ci->rgb1, rgb1);
+									else
+										VectorCopy(ci->rgb2, rgb1);
+								}
+								else {
+									VectorSet( rgb1, 0.0f, 64.0f, 255.0f );
+								}
 							}
-							else
-								VectorSet( rgb1, 0.0f, 64.0f, 255.0f );
-						}
-						break;
-						//rgb
+							break;
+							//rgb
 						}
 
 						//rgb
 						switch (scolor) {
-						case SABER_RED:
-						case SABER_ORANGE:
-						case SABER_YELLOW:
-						case SABER_GREEN:
-						case SABER_BLUE:
-						case SABER_PURPLE:
-						case SABER_RGB:
-						default:
-							trailShader = cgs.media.saberBlurShader;
-							break;
+							case SABER_RED:
+							case SABER_ORANGE:
+							case SABER_YELLOW:
+							case SABER_GREEN:
+							case SABER_BLUE:
+							case SABER_PURPLE:
+							case SABER_RGB:
+							default:
+								trailShader = cgs.media.saberBlurShader;
+								break;
 #if _SHITTYLINEFX
-						case SABER_FLAME1:
-							trailShader = cgs.media.rgbSaberTrail2Shader;
-							break;
-						case SABER_ELEC1:
-							trailShader = cgs.media.rgbSaberTrail3Shader;
-							break;
-						case SABER_FLAME2:
-							trailShader = cgs.media.rgbSaberTrail4Shader;
-							break;
-						case SABER_ELEC2:
-							trailShader = cgs.media.rgbSaberTrail5Shader;
-							break;
+							case SABER_FLAME1:
+								trailShader = cgs.media.rgbSaberTrail2Shader;
+								break;
+							case SABER_ELEC1:
+								trailShader = cgs.media.rgbSaberTrail3Shader;
+								break;
+							case SABER_FLAME2:
+								trailShader = cgs.media.rgbSaberTrail4Shader;
+								break;
+							case SABER_ELEC2:
+								trailShader = cgs.media.rgbSaberTrail5Shader;
+								break;
 #endif
-						case SABER_BLACK:
-							trailShader = cgs.media.blackBlurShader;
-							break;
+							case SABER_BLACK:
+								trailShader = cgs.media.blackBlurShader;
+								break;
 						}
 						//rgb
+
+#if NEW_SABER_PARMS
+						if (client->saber[saberNum].customTrailShader)
+							trailShader = client->saber[saberNum].customTrailShader;
+#endif
 
 						//Here we will use the happy process of filling a struct in with arguments and passing it to a trap function
 						//so that we can take the struct and fill in an actual CTrail type using the data within it once we get it
@@ -7410,10 +7578,10 @@ CheckTrail:
 		}
 	}
 	else {
-		// Use the supremely hacky SFX Sabers.
-		//saberTrail->duration = 1.0;//cg_saberTrailLength.value;
+		// SFX Saber trail
+		saberTrail->duration = 0;
 
-		if (!saberTrail->lastTime || !saberTrail->inAction) {
+		if (!saberTrail->base || !saberTrail->tip || !saberTrail->dualbase || !saberTrail->dualtip || !saberTrail->lastTime || !saberTrail->inAction) {
 			VectorCopy(org_, saberTrail->base);
 			VectorMA(end, -1.5f, axis_[0], saberTrail->tip);
 			VectorCopy(saberTrail->base, saberTrail->dualbase);
@@ -7450,7 +7618,7 @@ CheckTrail:
 			}
 
 			lagscale = (cg.time - saberTrail->lastTime);
-			lagscale = 1.0f - (lagscale * 3 / 200);
+			lagscale = 1.0f - (lagscale * 3.0f / 200.0f);
 
 			if (lagscale < 0.1f)
 				lagscale = 0.1f;
@@ -7470,49 +7638,48 @@ CheckTrail:
 
 		if (!dontDraw) {
 			switch (scolor) {
-			case SABER_RED:
-				VectorSet(rgb1, 255.0f, 0.0f, 0.0f);
-				break;
-
-			case SABER_ORANGE:
-				VectorSet(rgb1, 255.0f, 64.0f, 0.0f);
-				break;
-
-			case SABER_YELLOW:
-				VectorSet(rgb1, 255.0f, 255.0f, 0.0f);
-				break;
-
-			case SABER_GREEN:
-				VectorSet(rgb1, 0.0f, 255.0f, 0.0f);
-				break;
-
-			case SABER_BLUE:
-				VectorSet(rgb1, 0.0f, 64.0f, 255.0f);
-				break;
-
-			case SABER_PURPLE:
-				VectorSet(rgb1, 220.0f, 0.0f, 255.0f);
-				break;
-
-			case SABER_RGB:
-			{
-				int cnum = cent->currentState.clientNum;
-				if (cnum < MAX_CLIENTS) {
-					clientInfo_t *ci = &cgs.clientinfo[cnum];
-
-					if (saberNum == 0)
-						VectorCopy(ci->rgb1, rgb1);
-					else
-						VectorCopy(ci->rgb2, rgb1);
-				}
-				else
+				case SABER_RED:
+					VectorSet(rgb1, 255.0f, 0.0f, 0.0f);
+					break;
+				case SABER_ORANGE:
+					VectorSet(rgb1, 255.0f, 64.0f, 0.0f);
+					break;
+				case SABER_YELLOW:
+					VectorSet(rgb1, 255.0f, 255.0f, 0.0f);
+					break;
+				case SABER_GREEN:
+					VectorSet(rgb1, 0.0f, 255.0f, 0.0f);
+					break;
+				case SABER_BLUE:
 					VectorSet(rgb1, 0.0f, 64.0f, 255.0f);
-			}
-			break;
+					break;
+				case SABER_PURPLE:
+					VectorSet(rgb1, 220.0f, 0.0f, 255.0f);
+					break;
+				case SABER_RGB:
+				{
+					int cnum = cent->currentState.clientNum;
+#if NEW_SABER_PARMS
+					if (client->saber[saberNum].useCustomRGBColor) //set if hilt definition has customRGB colors set
+						VectorSet(rgb1, client->saber[saberNum].customRGB[0], client->saber[saberNum].customRGB[1], client->saber[saberNum].customRGB[2]);
+					else
+#endif
+					if (cnum < MAX_CLIENTS) {
+						clientInfo_t *ci = &cgs.clientinfo[cnum];
 
-			default:
-				VectorSet(rgb1, 0.0f, 64.0f, 255.0f);
+						if (saberNum == 0)
+							VectorCopy(ci->rgb1, rgb1);
+						else
+							VectorCopy(ci->rgb2, rgb1);
+					}
+					else {
+						VectorSet(rgb1, 0.0f, 64.0f, 255.0f);
+					}
+				}
 				break;
+				default:
+					VectorSet(rgb1, 0.0f, 64.0f, 255.0f);
+					break;
 			}
 
 			VectorCopy(saberTrail->base, fx.mVerts[0].origin);
@@ -7546,64 +7713,57 @@ JustDoIt:
 		CG_DoSFXSaber(fx.mVerts[0].origin, fx.mVerts[1].origin, fx.mVerts[2].origin, fx.mVerts[3].origin,
 			(client->saber[saberNum].blade[bladeNum].lengthMax), (client->saber[saberNum].blade[bladeNum].radius),
 			scolor, renderfx, (qboolean)(client->saber[saberNum].numBlades < 3
-				&& !(client->saber[saberNum].saberFlags2 & SFL2_NO_DLIGHT)),
-				(qboolean)(cg_saberTrail.integer > 0), cent->currentState.clientNum, saberNum);
+				&& !(client->saber[saberNum].saberFlags2 & SFL2_NO_DLIGHT)), cent->currentState.clientNum, saberNum);
 	} else {
 		CG_DoSaber( org_, axis_[0], saberLen, client->saber[saberNum].blade[bladeNum].lengthMax, client->saber[saberNum].blade[bladeNum].radius,
 			scolor, renderfx, (qboolean)(client->saber[saberNum].numBlades < 3 && !(client->saber[saberNum].saberFlags2&SFL2_NO_DLIGHT)), cent->currentState.clientNum, saberNum );//rgb -- fix casting?
 	}
 
-	if (sfxSabers && (saberTrail && cg.time > saberTrail->inAction)) { // <- Gives warning
+	if (sfxSabers && cg.time > saberTrail->inAction)
+	{
 		saberTrail->inAction = cg.time;
 
-		//GR - Just tweaking this a little, cuz it looks funny when you turn around slowly
-		VectorSubtract(fx.mVerts[2].origin, fx.mVerts[1].origin, draw_dir);
-		/*draw_len = */VectorNormalize(draw_dir);
+		fx.mShader = cgs.media.ShaderSaberTrail;
+		fx.mKillTime = 2;
+		fx.mSetFlags = FX_USE_ALPHA;
 
-		//	if ( draw_len > 2 ) {
-		if (1) {
-			fx.mShader = cgs.media.ShaderSaberTrail;
-			fx.mKillTime = 0;
-			fx.mSetFlags = FX_USE_ALPHA;
+		// New muzzle
+		VectorCopy(rgb1, fx.mVerts[0].rgb);
+		fx.mVerts[0].alpha = 255.0f;
 
-			// New muzzle
-			VectorCopy(rgb1, fx.mVerts[0].rgb);
-			fx.mVerts[0].alpha = 255.0f;
+		fx.mVerts[0].ST[0] = 0.0f;
+		fx.mVerts[0].ST[1] = 4.0f;
+		fx.mVerts[0].destST[0] = 4.0f;
+		fx.mVerts[0].destST[1] = 4.0f;
 
-			fx.mVerts[0].ST[0] = 0.0f;
-			fx.mVerts[0].ST[1] = 4.0f;
-			fx.mVerts[0].destST[0] = 4.0f;
-			fx.mVerts[0].destST[1] = 4.0f;
+		// new tip
+		VectorCopy(rgb1, fx.mVerts[1].rgb);
+		fx.mVerts[1].alpha = 255.0f;
+		
+		fx.mVerts[1].ST[0] = 0.0f;
+		fx.mVerts[1].ST[1] = 0.0f;
+		fx.mVerts[1].destST[0] = 4.0f;
+		fx.mVerts[1].destST[1] = 0.0f;
 
-			// new tip
-			VectorCopy(rgb1, fx.mVerts[1].rgb);
-			fx.mVerts[1].alpha = 255.0f;
+		// old tip
+		VectorCopy(rgb1, fx.mVerts[2].rgb);
+		fx.mVerts[2].alpha = 255.0f;
 
-			fx.mVerts[1].ST[0] = 0.0f;
-			fx.mVerts[1].ST[1] = 0.0f;
-			fx.mVerts[1].destST[0] = 4.0f;
-			fx.mVerts[1].destST[1] = 0.0f;
+		fx.mVerts[2].ST[0] = 4.0f;
+		fx.mVerts[2].ST[1] = 0.0f;
+		fx.mVerts[2].destST[0] = 4.0f;
+		fx.mVerts[2].destST[1] = 0.0f;
 
-			// old tip
-			VectorCopy(rgb1, fx.mVerts[2].rgb);
-			fx.mVerts[2].alpha = 255.0f;
+		// old muzzle
+		VectorCopy(rgb1, fx.mVerts[3].rgb);
+		fx.mVerts[3].alpha = 255.0f;
 
-			fx.mVerts[2].ST[0] = 4.0f;
-			fx.mVerts[2].ST[1] = 0.0f;
-			fx.mVerts[2].destST[0] = 4.0f;
-			fx.mVerts[2].destST[1] = 0.0f;
+		fx.mVerts[3].ST[0] = 4.0f;
+		fx.mVerts[3].ST[1] = 4.0f;
+		fx.mVerts[3].destST[0] = 4.0f;
+		fx.mVerts[3].destST[1] = 4.0f;
 
-			// old muzzle
-			VectorCopy(rgb1, fx.mVerts[3].rgb);
-			fx.mVerts[3].alpha = 255.0f;
-
-			fx.mVerts[3].ST[0] = 4.0f;
-			fx.mVerts[3].ST[1] = 4.0f;
-			fx.mVerts[3].destST[0] = 4.0f;
-			fx.mVerts[3].destST[1] = 4.0f;
-
-			trap->FX_AddPrimitive(&fx);
-		}
+		trap->FX_AddPrimitive(&fx);
 	}
 }
 
@@ -8696,7 +8856,6 @@ void CG_G2Animated( centity_t *cent )
 //Disabled for now, I'm too lazy to keep it working with all the stuff changing around.
 #if 1
 int cgFPLSState = 0;
-
 void CG_ForceFPLSPlayerModel(centity_t *cent, clientInfo_t *ci)
 {
 	animation_t *anim;
@@ -9458,7 +9617,6 @@ float CG_RadiusForCent( centity_t *cent )
 
 static float cg_vehThirdPersonAlpha = 1.0f;
 extern vec3_t	cg_crosshairPos;
-extern vec3_t	cameraCurLoc;
 void CG_CheckThirdPersonAlpha( centity_t *cent, refEntity_t *legs )
 {
 	float alpha = 1.0f;
@@ -9493,10 +9651,10 @@ void CG_CheckThirdPersonAlpha( centity_t *cent, refEntity_t *legs )
 			{//vehicle has auto third-person alpha on
 				trace_t trace;
 				vec3_t	dir2Crosshair, end;
-				VectorSubtract( cg_crosshairPos, cameraCurLoc, dir2Crosshair );
+				VectorSubtract( cg_crosshairPos, cg.refdef.viewangles, dir2Crosshair );
 				VectorNormalize( dir2Crosshair );
-				VectorMA( cameraCurLoc, cent->m_pVehicle->m_pVehicleInfo->cameraRange*2.0f, dir2Crosshair, end );
-				CG_G2Trace( &trace, cameraCurLoc, vec3_origin, vec3_origin, end, ENTITYNUM_NONE, CONTENTS_BODY );
+				VectorMA( cg.refdef.viewangles, cent->m_pVehicle->m_pVehicleInfo->cameraRange*2.0f, dir2Crosshair, end );
+				CG_G2Trace( &trace, cg.refdef.viewangles, vec3_origin, vec3_origin, end, ENTITYNUM_NONE, CONTENTS_BODY );
 				if ( trace.entityNum == cent->currentState.clientNum
 					|| trace.entityNum == cg.predictedPlayerState.clientNum)
 				{//hit me or the vehicle I'm in
@@ -9542,7 +9700,7 @@ void CG_CheckThirdPersonAlpha( centity_t *cent, refEntity_t *legs )
 }
 
 //[Kameleon] - Nerevar's Santa Hat feature. call somewhere in cg_players@void CG_Player
-void CG_DrawHatOnPlayer( centity_t *cent, int time, qhandle_t *gameModels, qhandle_t hatModel )
+void CG_DrawHatOnPlayer( centity_t *cent, int time, qhandle_t *gameModels, qhandle_t hatModel, refEntity_t parent )
 {
     int newBolt;
     mdxaBone_t matrix;
@@ -9611,6 +9769,9 @@ void CG_DrawHatOnPlayer( centity_t *cent, int time, qhandle_t *gameModels, qhand
         re.hModel = hatModel;
         VectorCopy( boltOrg, re.lightingOrigin );
         VectorCopy( boltOrg, re.origin );
+
+		re.renderfx = parent.renderfx;
+		re.customShader = parent.customShader;
  
         trap->R_AddRefEntityToScene( &re );
     }
@@ -9683,7 +9844,7 @@ void CG_Player( centity_t *cent ) {
 		VectorClear(cent->modelScale);
 	}
 
-	/*if (((cg_smoothClients.integer && !cgs.isJAPro) || cent->currentState.heldByClient) && (cent->currentState.groundEntityNum >= ENTITYNUM_WORLD || cent->currentState.eType == ET_TERRAIN) &&
+	if ((/*(cg_smoothClients.integer && cgs.serverMod != SVMOD_JAPRO) ||*/ cent->currentState.heldByClient) && (cent->currentState.groundEntityNum >= ENTITYNUM_WORLD || cent->currentState.eType == ET_TERRAIN) &&
 		!(cent->currentState.eFlags2 & EF2_HYPERSPACE) && cg.predictedPlayerState.m_iVehicleNum != cent->currentState.number)
 	{ //always smooth when being thrown
 		vec3_t			posDif;
@@ -9727,7 +9888,7 @@ void CG_Player( centity_t *cent ) {
 	else
 	{
 		VectorCopy(cent->lerpOrigin, cent->beamEnd);
-	}*/
+	}
 
 	if (cent->currentState.m_iVehicleNum &&
 		cent->currentState.NPC_class != CLASS_VEHICLE)
@@ -10045,7 +10206,7 @@ void CG_Player( centity_t *cent ) {
 		if (cg.snap->ps.duelInProgress) { // we are dueling
 			if (cent->currentState.number != cg.snap->ps.duelIndex) { // don't draw this entity because we aren't dueling them
 				if ((cg.predictedPlayerState.persistant[PERS_TEAM] != TEAM_SPECTATOR) || cg.predictedPlayerState.pm_flags & PMF_FOLLOW)
-					if (((cgs.isJAPlus && !(cp_pluginDisable.integer & JAPRO_PLUGIN_DUELSEEOTHERS)) || cgs.isJAPro) || (cg_stylePlayer.integer & JAPRO_STYLE_HIDENONDUELERS))
+					if ((cgs.serverMod == SVMOD_JAPLUS && !(cp_pluginDisable.integer & JAPRO_PLUGIN_DUELSEEOTHERS)) || cgs.serverMod == SVMOD_JAPRO || (cgs.serverMod != SVMOD_JAPLUS && cg_stylePlayer.integer & JAPRO_STYLE_HIDENONDUELERS))
 						return;
 			}
 		}
@@ -10068,6 +10229,12 @@ void CG_Player( centity_t *cent ) {
 
 	if (cg_drawHitBox.integer) {
 		vec3_t bmins = {-15, -15, DEFAULT_MINS_2}, bmaxs = {15, 15, DEFAULT_MAXS_2}, absmin, absmax;
+
+		if (pm && cent->currentState.clientNum && pm->ps->clientNum)
+		{
+			VectorCopy(pm->mins, bmins);
+			VectorCopy(pm->maxs, bmaxs);
+		}
 
 		if (!CG_IsMindTricked(cent->currentState.trickedentindex,
 			cent->currentState.trickedentindex2,
@@ -10458,32 +10625,6 @@ void CG_Player( centity_t *cent ) {
 		trap->R_AddRefEntityToScene( &seeker );
 	}
 
-	//[Kameleon] - Nerevar's Santa Hat.
-	if (cgs.isJAPro && !(cg_stylePlayer.integer & JAPRO_STYLE_HIDECOSMETICS)) {
-		if (ci->cosmetics & JAPRO_COSMETIC_SANTAHAT) {
-			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, trap->R_RegisterModel("models/players/hats/santahat.md3"));
-		}
-		else if (ci->cosmetics & JAPRO_COSMETIC_PUMKIN) {
-			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, trap->R_RegisterModel("models/players/hats/pumpkin.md3"));
-		}
-		else if (ci->cosmetics & JAPRO_COSMETIC_CAP) {
-			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, trap->R_RegisterModel("models/players/hats/cap.md3"));
-		}
-		else if (ci->cosmetics & JAPRO_COSMETIC_FEDORA) {
-			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, trap->R_RegisterModel("models/players/hats/fedora.md3"));
-		}
-		else if (ci->cosmetics & JAPRO_COSMETIC_CRINGE) {
-			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, trap->R_RegisterModel("models/players/hats/cringe.md3"));
-		}
-		else if (ci->cosmetics & JAPRO_COSMETIC_SOMBRERO) {
-			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, trap->R_RegisterModel("models/players/hats/sombrero.md3"));
-		}
-		else if (ci->cosmetics & JAPRO_COSMETIC_TOPHAT) {
-			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, trap->R_RegisterModel("models/players/hats/tophat.md3"));
-		}
-	}
-	//[/Kameleon]
-
 	// add a water splash if partially in and out of water
 	CG_PlayerSplash( cent );
 
@@ -10505,6 +10646,73 @@ void CG_Player( centity_t *cent ) {
 		legs.renderfx |= RF_SHADOW_ONLY;
 	}
 	VectorCopy (legs.origin, legs.oldorigin);	// don't positionally lerp at all
+
+	//hack to fix bugged player animations
+	if (cent->currentState.eType != ET_NPC && (cent->currentState.weapon != WP_SABER || cent->currentState.saberInFlight))
+	{
+		if (cent->currentState.torsoAnim == BOTH_RUN2 || cent->currentState.torsoAnim == BOTH_RUN_DUAL)
+			cent->currentState.torsoAnim = BOTH_RUN1;
+
+		if (cent->currentState.legsAnim == BOTH_RUN2 || cent->currentState.legsAnim == BOTH_RUN_DUAL)
+			cent->currentState.legsAnim = BOTH_RUN1;
+
+		if (cent->currentState.torsoAnim == BOTH_RUNBACK2 || cent->currentState.torsoAnim == BOTH_RUNBACK_DUAL)
+			cent->currentState.torsoAnim = BOTH_RUNBACK1;
+
+		if (cent->currentState.legsAnim == BOTH_RUNBACK2 || cent->currentState.legsAnim == BOTH_RUNBACK_DUAL)
+			cent->currentState.legsAnim = BOTH_RUNBACK1;
+
+		if (cent->currentState.torsoAnim == BOTH_WALK2 || cent->currentState.torsoAnim == BOTH_WALK_DUAL)
+			cent->currentState.torsoAnim = BOTH_WALK1;
+
+		if (cent->currentState.legsAnim == BOTH_WALK2 || cent->currentState.legsAnim == BOTH_WALK_DUAL)
+			cent->currentState.legsAnim = BOTH_WALK1;
+
+		if (cent->currentState.torsoAnim == BOTH_WALKBACK2 || cent->currentState.torsoAnim == BOTH_WALKBACK_DUAL)
+			cent->currentState.torsoAnim = BOTH_WALKBACK1;
+
+		if (cent->currentState.legsAnim == BOTH_WALKBACK2 || cent->currentState.legsAnim == BOTH_WALKBACK_DUAL)
+			cent->currentState.legsAnim = BOTH_WALKBACK1;
+
+		if (cent->currentState.saberInFlight && cent->currentState.torsoAnim == BOTH_STAND1)
+			cent->currentState.torsoAnim = cent->currentState.legsAnim;
+
+		if (cgs.serverMod != SVMOD_JAPRO) {
+			if (cent->currentState.torsoAnim == BOTH_RUN_STAFF)
+				cent->currentState.torsoAnim = BOTH_RUN1;
+
+			if (cent->currentState.legsAnim == BOTH_RUN_STAFF)
+				cent->currentState.legsAnim = BOTH_RUN1;
+
+			if (cent->currentState.torsoAnim == BOTH_RUNBACK_STAFF)
+				cent->currentState.torsoAnim = BOTH_RUNBACK1;
+
+			if (cent->currentState.legsAnim == BOTH_RUNBACK_STAFF)
+				cent->currentState.legsAnim = BOTH_RUNBACK1;
+
+			if (cent->currentState.torsoAnim == BOTH_WALK_STAFF)
+				cent->currentState.torsoAnim = BOTH_WALK1;
+
+			if (cent->currentState.legsAnim == BOTH_WALK_STAFF)
+				cent->currentState.legsAnim = BOTH_WALK1;
+
+			if (cent->currentState.torsoAnim == BOTH_WALKBACK_STAFF)
+				cent->currentState.torsoAnim = BOTH_WALKBACK1;
+
+			if (cent->currentState.legsAnim == BOTH_WALKBACK_STAFF)
+				cent->currentState.legsAnim = BOTH_WALKBACK1;
+		}
+
+		if (cent->currentState.weapon == WP_BRYAR_OLD && cent->currentState.torsoAnim == BOTH_STAND1) {
+			cent->currentState.torsoAnim = BOTH_ATTACK2;
+		}
+		else if (cent->currentState.weapon == WP_CONCUSSION) {
+			if (cent->currentState.legsAnim == BOTH_ATTACK2)
+				cent->currentState.legsAnim = BOTH_ATTACK3;
+			if (cent->currentState.torsoAnim == BOTH_ATTACK2)
+				cent->currentState.torsoAnim = BOTH_ATTACK3;
+		}
+	}
 
 	CG_G2PlayerAngles( cent, legs.axis, rootAngles );
 	CG_G2PlayerHeadAnims( cent );
@@ -10858,7 +11066,6 @@ skipTrail:
 #endif
 	//END strafe trails
 
-
 	//trigger animation-based sounds, done before next lerp frame.
 	CG_TriggerAnimSounds(cent);
 
@@ -11118,7 +11325,7 @@ skipTrail:
 
 	if (cent->currentState.weapon == WP_STUN_BATON && cent->currentState.number == cg.snap->ps.clientNum)
 	{
-		if (cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE]) { //We are racing
+		if (cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE]) { //We are racing
 		}
 		else {
 			trap->S_AddLoopingSound(cent->currentState.number, cg.refdef.vieworg, vec3_origin, trap->S_RegisterSound("sound/weapons/baton/idle.wav"));
@@ -11598,7 +11805,7 @@ stillDoSaber:
 					}
 					else
 					{
-						trap->G2API_InitGhoul2Model(&saberEnt->ghoul2, "models/weapons2/saber/saber_w.glm", 0, 0, 0, 0, 0);
+						trap->G2API_InitGhoul2Model(&saberEnt->ghoul2, DEFAULT_SABER_MODEL, 0, 0, 0, 0, 0);
 					}
 					//trap->G2API_DuplicateGhoul2Instance(cent->ghoul2, &saberEnt->ghoul2);
 
@@ -12043,19 +12250,23 @@ stillDoSaber:
 //JAPRO - Clientside - Brightskins - Start
 	if (cg_stylePlayer.integer & JAPRO_STYLE_FULLBRIGHT)
 	{
-		legs.renderfx |= RF_FULLBRIGHT; //engine check for this
-		/*legs.shaderRGBA[0] = 255;
-		legs.shaderRGBA[1] = 255;
-		legs.shaderRGBA[2] = 255;
-		legs.renderfx |= RF_RGB_TINT;*/
+		if (cgs.jaPROEngine) {
+			legs.renderfx |= RF_FULLBRIGHT;
+		}
+		else {
+			legs.shaderRGBA[0] = 255;
+			legs.shaderRGBA[1] = 255;
+			legs.shaderRGBA[2] = 255;
+			legs.renderfx |= RF_RGB_TINT;
+		}
 	}
 	
-	if (!(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD) && (cg.snap->ps.clientNum == cent->currentState.number)) {
+	if (cgs.jaPROEngine && !(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD) && (cg.snap->ps.clientNum == cent->currentState.number)) {
 		legs.renderfx |= RF_NOLOD;
 	}
 //JAPRO - Clientside - Brightskins - End
 
-	if (cg.snap->ps.duelInProgress) //&& cent->currentState.number != cg.snap->ps.clientNum
+	if (cg.snap->ps.duelInProgress)
 	{ //I guess go ahead and glow your own client too in a duel
 		if (cent->currentState.number != cg.snap->ps.duelIndex &&
 			cent->currentState.number != cg.snap->ps.clientNum)
@@ -12066,7 +12277,7 @@ stillDoSaber:
 			legs.renderfx |= RF_RGB_TINT;
 		}
 		else {
-			if (!(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD))
+			if (cgs.jaPROEngine && !(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD))
 				legs.renderfx |= RF_NOLOD;
 
 			if (cg_stylePlayer.integer & JAPRO_STYLE_SHELL)
@@ -12106,13 +12317,13 @@ stillDoSaber:
 						legs.renderfx &= ~RF_FORCE_ENT_ALPHA;
 						legs.customShader = cgs.media.forceShell;
 
-						if (!(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD)) //high shell lod?
+						if (cgs.jaPROEngine && !(cg_stylePlayer.integer & JAPRO_STYLE_PLAYERLOD)) //high shell lod?
 							legs.renderfx |= RF_NOLOD;
 
 						trap->R_AddRefEntityToScene(&legs);	//draw the shell
 
 						legs.customShader = 0;	//reset to player model
-						if (cgs.isJAPlus || cgs.isJAPro) { // dim color further away
+						if (cgs.serverMod >= SVMOD_JAPLUS) { // dim color further away
 							legs.shaderRGBA[0] = Q_max(savRGBA[0] - subLen / 32, 1);
 							legs.shaderRGBA[1] = Q_max(savRGBA[1] - subLen / 32, 1);
 							legs.shaderRGBA[2] = Q_max(savRGBA[2] - subLen / 32, 1);
@@ -12125,9 +12336,7 @@ stillDoSaber:
 
 						if (subLen <= 1024) {
 							if (cg_stylePlayer.integer & JAPRO_STYLE_SHELL)
-								legs.renderfx |= RF_FULLBRIGHT;
-							//else if (cg_drawDuelShell.integer == 2) // base behavior, add engine check for this!!!11
-								//legs.renderfx |= RF_RGB_TINT;
+								legs.renderfx |= (cgs.jaPROEngine ? RF_FULLBRIGHT : RF_RGB_TINT);
 						}
 					}
 				}
@@ -12136,7 +12345,10 @@ stillDoSaber:
 	}
 	else
 	{
-		if (cent->currentState.bolt1 == 1 && !(cent->currentState.eFlags & EF_DEAD) && cent->currentState.number != cg.snap->ps.clientNum && (!cg.snap->ps.duelInProgress || cg.snap->ps.duelIndex != cent->currentState.number))
+		if (cent->currentState.bolt1 == 1
+			&& !(cent->currentState.eFlags & EF_DEAD) && cent->currentState.number != cg.snap->ps.clientNum
+			&& (!cg.snap->ps.duelInProgress || cg.snap->ps.duelIndex != cent->currentState.number)
+			&& !(cg_stylePlayer.integer & JAPRO_STYLE_VFXDUELERS))
 		{
 			legs.shaderRGBA[0] = 50;
 			legs.shaderRGBA[1] = 50;
@@ -12289,40 +12501,46 @@ stillDoSaber:
 
 	{
 		qboolean stylePlayer1 = qfalse;
+		qboolean stylePlayer2 = qfalse;
 		qboolean drawPlayer = qtrue;
 		if (cent->currentState.number != cg.snap->ps.clientNum && ((cg.predictedPlayerState.clientNum != cent->currentState.owner) || (cent->currentState.eType != ET_NPC || cent->currentState.NPC_class != CLASS_VEHICLE))) { //Never change our own appeareance
 			if (cg.snap->ps.duelInProgress) { //We are dueling
 											  //Uhh.. dont draw anyone differently since they are invis i guess and us/opponent look normal
 			}
-			else if (cgs.isJAPro && cg.predictedPlayerState.stats[STAT_RACEMODE]) {// We are racing
-				if ((!cent->currentState.bolt1 && !(cg_stylePlayer.integer & JAPRO_STYLE_NONRACERVFXDISABLE)) || //they're in FFA or they're another racer
-					(!cg_stylePlayer.integer & JAPRO_STYLE_RACERVFXDISABLE)) {
+			else if (cgs.serverMod == SVMOD_JAPRO && cg.predictedPlayerState.stats[STAT_RACEMODE]) {// We are racing
+				if ((!cent->currentState.bolt1 && !(cg_stylePlayer.integer & JAPRO_STYLE_NONRACERVFXDISABLE)) //they're in FFA or they're another racer
+				|| !(cg_stylePlayer.integer & JAPRO_STYLE_RACERVFXDISABLE))
+				{
 					stylePlayer1 = qtrue;
+					stylePlayer2 = qfalse;
 					drawPlayer = qfalse;
 				}
 			}
 			else { //We are in ffa
 				if (cent->currentState.bolt1 == 1 && (cg_stylePlayer.integer & JAPRO_STYLE_VFXDUELERS)) { //They are dueling
-					stylePlayer1 = qtrue;
-					drawPlayer = qtrue;
+					stylePlayer1 = qfalse;
+					stylePlayer2 = qtrue;
+					drawPlayer = qfalse;
 				}
-				else if (cgs.isJAPro && cent->currentState.bolt1 == 2 && !(cg_stylePlayer.integer & JAPRO_STYLE_RACERVFXDISABLE)) { //They are racing
+				else if (cgs.serverMod == SVMOD_JAPRO && cent->currentState.bolt1 == 2 && !(cg_stylePlayer.integer & JAPRO_STYLE_RACERVFXDISABLE)) { //They are racing
 					stylePlayer1 = qtrue;
+					stylePlayer2 = qfalse;
 					drawPlayer = qfalse;
 				}
 			}
 		}
 
-		if (!(cent->currentState.powerups & (1 << PW_CLOAKED)) && (stylePlayer1 || drawPlayer)) {
+		if (!(cent->currentState.powerups & (1 << PW_CLOAKED)) && (stylePlayer1 || stylePlayer2 || drawPlayer)) {
 			if (stylePlayer1) {
-				/*legs.renderfx = 0;//&= ~(RF_RGB_TINT|RF_ALPHA_FADE);
-				legs.shaderRGBA[0] = 255;
-				legs.shaderRGBA[1] = 255;
-				legs.shaderRGBA[2] = 255;
-				legs.shaderRGBA[3] = 255;*/
 				legs.renderfx &= ~RF_RGB_TINT;
 				legs.shaderRGBA[3] = 50;
 				legs.customShader = cgs.media.raceShader;
+			}
+
+			if (stylePlayer2) {
+				legs.renderfx &= ~RF_RGB_TINT;
+				legs.shaderRGBA[3] = 100;
+				legs.customShader = cgs.media.duelShader;
 			}
 
 			if (drawPlayer)
@@ -12331,6 +12549,32 @@ stillDoSaber:
 			trap->R_AddRefEntityToScene(&legs);
 		}
 	}
+
+	//[Kameleon] - Nerevar's Santa Hat.
+	if (cgs.serverMod != SVMOD_JAPLUS && cgs.serverMod != SVMOD_BASEJKA && !(cg_stylePlayer.integer & JAPRO_STYLE_HIDECOSMETICS)) {
+		if (ci->cosmetics & JAPRO_COSMETIC_SANTAHAT) {
+			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, cgs.media.cosmetics.santaHat, legs);
+		}
+		else if (ci->cosmetics & JAPRO_COSMETIC_PUMKIN) {
+			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, cgs.media.cosmetics.pumpkin, legs);
+		}
+		else if (ci->cosmetics & JAPRO_COSMETIC_CAP) {
+			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, cgs.media.cosmetics.cap, legs);
+		}
+		else if (ci->cosmetics & JAPRO_COSMETIC_FEDORA) {
+			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, cgs.media.cosmetics.fedora, legs);
+		}
+		else if (ci->cosmetics & JAPRO_COSMETIC_CRINGE) {
+			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, cgs.media.cosmetics.kringekap, legs);
+		}
+		else if (ci->cosmetics & JAPRO_COSMETIC_SOMBRERO) {
+			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, cgs.media.cosmetics.sombrero, legs);
+		}
+		else if (ci->cosmetics & JAPRO_COSMETIC_TOPHAT) {
+			CG_DrawHatOnPlayer(cent, cg.time, cgs.gameModels, cgs.media.cosmetics.tophat, legs);
+		}
+	}
+	//[/Kameleon]
 
 	//cent->frame_minus2 = cent->frame_minus1;
 	VectorCopy(cent->frame_minus1, cent->frame_minus2);
@@ -12518,7 +12762,7 @@ stillDoSaber:
 	//Showing only when the power has been active (absorbed something) recently now, instead of always.
 	//AND
 	//always show if it is you with the absorb on
-	if (((cg_alwaysShowAbsorb.integer && !cgs.isBaseEnhanced) && cent->currentState.forcePowersActive & (1<<FP_ABSORB)) ||
+	if (((cg_alwaysShowAbsorb.integer && cgs.serverMod != SVMOD_BASEENHANCED) && cent->currentState.forcePowersActive & (1<<FP_ABSORB)) ||
 		(cent->teamPowerEffectTime > cg.time && cent->teamPowerType == 3))
 	{ //aborb is represented by blue..
 		legs.shaderRGBA[0] = 0;

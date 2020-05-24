@@ -1200,11 +1200,14 @@ void Com_Init( char *commandLine ) {
 			Cmd_AddCommand ("freeze", Com_Freeze_f);
 		}
 		Cmd_AddCommand ("quit", Com_Quit_f, "Quits the game" );
+
 #ifndef FINAL_BUILD
 		Cmd_AddCommand ("changeVectors", MSG_ReportChangeVectors_f );
 #endif
 		Cmd_AddCommand ("writeconfig", Com_WriteConfig_f, "Write the configuration to file" );
 		Cmd_SetCommandCompletionFunc( "writeconfig", Cmd_CompleteCfgName );
+		Cmd_AddCommand("write", Com_WriteConfig_f, "Write the configuration to file");
+		Cmd_SetCommandCompletionFunc("write", Cmd_CompleteCfgName);
 
 		Com_ExecuteCfg();
 
@@ -1227,6 +1230,11 @@ void Com_Init( char *commandLine ) {
 	#endif
 		// allocate the stack based hunk allocator
 		Com_InitHunkMemory();
+
+#ifndef DEDICATED //initialize Steam API here so the cvar doesn't have to be set in the command line
+		Cvar_Get("com_steamIntegration", "1", CVAR_ARCHIVE|CVAR_LATCH, "Enables automatic Steam API integration (requires a steam_api.dll to be in GameData)");
+		Sys_SteamInit();
+#endif
 
 		// if any archived cvars are modified after this, we will trigger a writing
 		// of the config file
@@ -1265,7 +1273,7 @@ void Com_Init( char *commandLine ) {
 
 		com_affinity = Cvar_Get( "com_affinity", "0", CVAR_ARCHIVE_ND );
 #ifdef _WIN32
-		com_priority = Cvar_Get("com_priority", /*"normal"*/"0", CVAR_ARCHIVE_ND|CVAR_NORESTART); //duno, 1 = low priority, 2 = normal priority, 3 = high priority? i guess??
+		com_priority = Cvar_Get("com_priority", "-1", CVAR_ARCHIVE_ND|CVAR_NORESTART); //duno, -1 = do nothing, 1 = low priority, 2 = normal priority, 3 = high priority? i guess??
 #endif
 		com_busyWait = Cvar_Get( "com_busyWait", "0", CVAR_ARCHIVE_ND );
 
@@ -1713,6 +1721,8 @@ void Com_Shutdown (void)
 		FS_FCloseFile( com_journalFile );
 		com_journalFile = 0;
 	}
+
+	Sys_SteamShutdown();
 
 	MSG_shutdownHuffman();
 /*

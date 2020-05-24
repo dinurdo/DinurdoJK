@@ -151,6 +151,23 @@ typedef struct clientActive_s {
 	entityState_t	parseEntities[MAX_PARSE_ENTITIES];
 
 	char			*mSharedMemory;
+
+#if defined(DISCORD) && !defined(_DEBUG)
+	struct {
+		qboolean		needPassword;
+		char			hostName[MAX_HOSTNAMELENGTH];
+		char			mapName[MAX_QPATH];
+		int				gametype;
+		int				timelimit;
+		int				playerCount;
+		int				redTeam;
+		int				blueTeam;
+		int				specCount;
+		int				botCount;
+		int				maxPlayers;
+		char			fs_game[MAX_QPATH];
+	} discord;
+#endif
 } clientActive_t;
 
 extern	clientActive_t		cl;
@@ -224,7 +241,7 @@ typedef struct clientConnection_s {
 	qboolean	downloadRestart;	// if true, we need to do another FS_Restart because we downloaded a pak
 
 	// demo information
-	char		demoName[MAX_QPATH];
+	char		demoName[MAX_STRING_CHARS];
 	qboolean	spDemoRecording;
 	qboolean	demorecording;
 	qboolean	demoplaying;
@@ -304,6 +321,11 @@ typedef struct clientStatic_s {
 
 	int			afkTime;
 
+#if defined(DISCORD) && !defined(_DEBUG)
+	qboolean	discordInitialized;
+	int			discordUpdateTime;
+#endif
+
 	int			numlocalservers;
 	serverInfo_t	localServers[MAX_OTHER_SERVERS];
 
@@ -332,8 +354,9 @@ typedef struct clientStatic_s {
 	qhandle_t	consoleShader;
 	float		widthRatioCoef;
 
-	struct {
-		fileHandle_t	chat;
+	struct { //chatlogging
+		qboolean		started;
+		fileHandle_t	file;
 	} log;
 } clientStatic_t;
 
@@ -435,10 +458,18 @@ extern cvar_t	*cl_colorString;
 extern cvar_t	*cl_colorStringCount;
 extern cvar_t	*cl_colorStringRandom;
 
-extern cvar_t	*cl_logChat;
+extern cvar_t	*cl_chatStylePrefix;
+extern cvar_t	*cl_chatStyleSuffix;
 
+extern cvar_t	*cl_afkPrefix;
 extern cvar_t	*cl_afkTime;
 extern cvar_t	*cl_afkTimeUnfocused;
+
+extern cvar_t	*cl_logChat;
+
+#if defined(DISCORD) && !defined(_DEBUG)
+extern cvar_t	*cl_discordRichPresence;
+#endif
 
 //=================================================
 
@@ -479,10 +510,14 @@ void CL_InitRef( void );
 
 int CL_ServerStatus( const char *serverAddress, char *serverStatusString, int maxLen );
 
-void CL_RandomizeColors(const char*, char*);
+void CL_RandomizeColors(const char *in, char *out);
 void CL_Afk_f(void);
 
-void CL_LogPrintf(fileHandle_t fileHandle, const char *fmt, ...);
+#if defined(DISCORD) && !defined(_DEBUG)
+void CL_DiscordInitialize(void);
+void CL_DiscordShutdown(void);
+void CL_DiscordUpdatePresence(void);
+#endif
 
 qboolean CL_CheckPaused(void);
 

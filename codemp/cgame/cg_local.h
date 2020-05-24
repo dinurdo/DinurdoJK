@@ -211,23 +211,25 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define JAPRO_PLUGIN_CENTERMUZZLE	(1<<27)	//
 
 //Style playermodel stuff
-#define JAPRO_STYLE_FULLBRIGHT	(1<<0)
-#define JAPRO_STYLE_SHELL		(1<<1)
-#define JAPRO_STYLE_HIDEDUELERS1 (1<<2)
-#define JAPRO_STYLE_HIDERACERS1 (1<<3) //hide racer if we ffa
-#define JAPRO_STYLE_HIDERACERS2 (1<<4) //hide ffa if we racer
-#define JAPRO_STYLE_HIDERACERS3 (1<<5) //hide racers if we racer
-#define JAPRO_STYLE_RACERVFXDISABLE	(1<<6) //show fellow racers normally
-#define JAPRO_STYLE_NONRACERVFXDISABLE (1<<7) //show racers normally
-#define JAPRO_STYLE_VFXDUELERS	(1<<8)
-#define JAPRO_STYLE_VFXALTDIM	(1<<9) //ja+
-#define JAPRO_STYLE_HIDENONDUELERS	(1<<10) //base
-#define JAPRO_STYLE_HIDEYSALSHELL	(1<<11)
-#define	JAPRO_STYLE_PLAYERLOD	(1<<12)
-#define JAPRO_STYLE_NOBODIES	(1<<13)
-#define JAPRO_STYLE_NOFADESFX	(1<<14)
-#define JAPRO_STYLE_COLOREDSPAWNBUBBLE (1<<15)
-#define JAPRO_STYLE_HIDECOSMETICS (1<<16)
+#define JAPRO_STYLE_FULLBRIGHT			(1<<0)
+#define JAPRO_STYLE_SHELL				(1<<1)
+#define JAPRO_STYLE_HIDEDUELERS1		(1<<2)
+#define JAPRO_STYLE_HIDERACERS1			(1<<3) //hide racer if we ffa
+#define JAPRO_STYLE_HIDERACERS2			(1<<4) //hide ffa if we racer
+#define JAPRO_STYLE_HIDERACERS3			(1<<5) //hide racers if we racer
+#define JAPRO_STYLE_RACERVFXDISABLE		(1<<6) //show fellow racers normally
+#define JAPRO_STYLE_NONRACERVFXDISABLE	(1<<7) //show racers normally
+#define JAPRO_STYLE_VFXDUELERS			(1<<8)
+#define JAPRO_STYLE_VFXALTDIM			(1<<9) //ja+
+#define JAPRO_STYLE_HIDENONDUELERS		(1<<10) //base
+#define JAPRO_STYLE_HIDEYSALSHELL		(1<<11)
+#define	JAPRO_STYLE_PLAYERLOD			(1<<12)
+#define JAPRO_STYLE_NOBODIES			(1<<13)
+#define JAPRO_STYLE_NOFADESFX			(1<<14)
+#define JAPRO_STYLE_COLOREDSPAWNBUBBLE	(1<<15)
+#define JAPRO_STYLE_HIDECOSMETICS		(1<<16)
+#define JAPRO_STYLE_DISABLEBREATHING	(1<<17)
+#define JAPRO_STYLE_OLDGRAPPLELINE		(1<<18)
 
 //japro ignore race fx
 #define RS_TIMER_START					(1<<0) //Ignore sound for start trigger
@@ -245,17 +247,16 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 //#define JAPRO_CINFO_UNLAGGEDPUSHPULL (1<<19)	//push pull unlagged
 
 //JAPRO - Serverside + clientside , restrictions 
-#define JAPRO_RESTRICT_BHOP (1<<0)
-#define JAPRO_RESTRICT_CROUCHJUMP (1<<1)
-#define JAPRO_RESTRICT_DOUBLEJUMP (1<<2)
+#define JAPRO_RESTRICT_BHOP			(1<<0)
+#define JAPRO_RESTRICT_CROUCHJUMP	(1<<1)
+#define JAPRO_RESTRICT_DOUBLEJUMP	(1<<2)
 //[JAPRO - Clientside - All - Define cinfo bits - End]
 
-#define JAPRO_CHATLOG_ENABLE	(1<<0)
-#define JAPRO_CHATLOG_SYNC		(1<<1)
-#define JAPRO_CHATLOG_OLDTIMESTAMP (1<<2)
-#define JAPRO_CHATLOG_PRINT		(1<<3)
-#define JAPRO_CHATLOG_CENTERPRINT	(1<<4)
-#define JAPRO_CHATLOG_DEATHS	(1<<5)
+#define JAPRO_CHATLOG_ENABLE		(1<<0)
+#define JAPRO_CHATLOG_SYNC			(1<<1)
+#define JAPRO_CHATLOG_OLDTIMESTAMP	(1<<2)
+#define JAPRO_CHATLOG_PRINT			(1<<3)
+#define JAPRO_CHATLOG_CENTERPRINT	(1<<3)
 
 #define _SPPHYSICS 1
 typedef enum //movementstyle enum
@@ -279,6 +280,15 @@ typedef enum //movementstyle enum
 	MV_BOTCPM,
 	MV_NUMSTYLES,
 } movementStyle_e;
+
+typedef enum //server mod enum
+{
+	SVMOD_BASEJKA,
+	SVMOD_BASEENHANCED,
+	SVMOD_OJKALT,
+	SVMOD_JAPLUS,
+	SVMOD_JAPRO,
+} serverMod_t;
 
 typedef enum {
 	FOOTSTEP_STONEWALK,
@@ -513,6 +523,9 @@ typedef struct clientInfo_s {
 #if _STRAFETRAILS
 	vec3_t		rgb1, rgb2; //rename this shit so it doesnt conflict with saber rgb
 #endif
+
+	int			deaths; //counted locally client-side, incase the server doesn't send this information already
+	int			breathTime; //can maybe just use breathPuffTime?
 } clientInfo_t;
 
 //rww - cheap looping sound struct
@@ -924,17 +937,6 @@ typedef struct strafeTrail_s {
 } strafeTrail_t;
 #endif
 
-#define MAX_COSMETIC_UNLOCKS 32
-typedef struct CosmeticUnlocks_s {
-	unsigned short	bitvalue;
-	char			mapname[40];
-	short			style;
-	unsigned int	duration;
-	qboolean		active;
-} CosmeticUnlocks_t;
-CosmeticUnlocks_t cosmeticUnlocks[MAX_COSMETIC_UNLOCKS];
-//japro
-
 //======================================================================
 
 
@@ -953,7 +955,7 @@ typedef struct score_s {
 	int				assistCount;
 	int				captures;
 	int				deaths; //JAPRO - Scoreboard Deaths
-	qboolean	perfect;
+	qboolean		perfect;
 	int				team;
 } score_t;
 
@@ -1056,10 +1058,10 @@ typedef struct skulltrail_s {
 #define MAX_PREDICTED_EVENTS	16
 
 
-#define	MAX_CHATBOX_ITEMS		5
+#define	MAX_CHATBOX_ITEMS		24
 typedef struct chatBoxItem_s
 {
-	char	string[MAX_SAY_TEXT];
+	char	string[MAX_NETNAME+MAX_SAY_TEXT];
 	int		time;
 	int		lines;
 } chatBoxItem_t;
@@ -1163,21 +1165,23 @@ typedef struct cg_s {
 	// zoom key
 	qboolean	zoomed;
 	int			zoomTime;
+
+	qboolean	coldBreathEffects;
 	float		zoomSensitivity;
 
 	// information screen text during loading
 	char		infoScreenText[MAX_STRING_CHARS];
 
 	// scoreboard
-	int			scoresRequestTime;
-	int			numScores;
-	int			selectedScore;
-	int			teamScores[2];
-	score_t		scores[MAX_CLIENTS];
-	qboolean	showScores;
-	qboolean	scoreBoardShowing;
-	int			scoreFadeTime;
-	char		killerName[MAX_NETNAME];
+	int				scoresRequestTime;
+	int				numScores;
+	int				selectedScore;
+	int				teamScores[2];
+	score_t			scores[MAX_CLIENTS];
+	qboolean		showScores;
+	qboolean		scoreBoardShowing;
+	int				scoreFadeTime;
+	char			killerName[MAX_NETNAME];
 	char			spectatorList[MAX_STRING_CHARS];		// list of names
 	int				spectatorLen;												// length of list
 	float			spectatorWidth;											// width in device units
@@ -1385,42 +1389,46 @@ Ghoul2 Insert End
 	qboolean			wasOnGround;
 	vec3_t				lastGroundPosition;
 
-	int				telemarkX;//japro
-	int				telemarkY;//japro
-	int				telemarkZ;//japro
-	int				telemarkYaw;//japro
-	int				lastAutoKillTime;
+	int					telemarkX;//japro
+	int					telemarkY;//japro
+	int					telemarkZ;//japro
+	int					telemarkYaw;//japro
+	int					lastAutoKillTime;
 
 	//int				predictedRocketJumpTime;
 	//int				predictedRocketJumpExpireTime;
 	//vec3_t			predictedRocketJumpOriginalVel;
-	vec3_t			predictedRocketJumpImpulse;
-	qboolean		predictKnockback;
+	vec3_t				predictedRocketJumpImpulse;
+	qboolean			predictKnockback;
 
-	float			lastXpos;
-	float			lastYpos;
+	float				lastXpos;
+	float				lastYpos;
 
-	vec4_t			strafeHelperActiveColor;	
-	vec4_t			crosshairColor;
-	int				drawingStrafeTrails;//optimization i guess
-	int				doVstrTime;
-	char			doVstr[MAX_QPATH];
-	short			numFKFrames;
-	short			numJumps;
-	int				userinfoUpdateDebounce;
-	qboolean		loggingStrafeTrail;
-	char			logStrafeTrailFilename[MAX_QPATH];
-	fileHandle_t	strafeTrailFileHandle;
-	char			lastChatMsg[MAX_SAY_TEXT + MAX_NETNAME + 32];
+	vec4_t				strafeHelperActiveColor;
+	vec4_t				crosshairColor;
+	int					drawingStrafeTrails;//optimization i guess
+	int					doVstrTime;
+	char				doVstr[MAX_QPATH];
+	short				numFKFrames;
+	short				numJumps;
+	int					userinfoUpdateDebounce;
+	qboolean			loggingStrafeTrail;
+	char				logStrafeTrailFilename[MAX_QPATH];
+	fileHandle_t		strafeTrailFileHandle;
+	char				lastChatMsg[MAX_SAY_TEXT + MAX_NETNAME + 32];
+	float				predictedTimeFrac;	// frameInterpolation * (next->commandTime - prev->commandTime)
 #if 0
 	int					snapshotTimeoutTime;
 #endif
 
-	struct {
-		fileHandle_t	chat; //chatlog
+	struct {//chatlog
+		fileHandle_t	file;
+		qboolean		started;
 	} log;
 
 } cg_t;
+
+#define CAMERA_MIN_FPS 15
 
 #define MAX_TICS	14
 
@@ -1599,6 +1607,11 @@ typedef struct cgMedia_s {
 	qhandle_t	yellowDroppedSaberShader;
 
 	qhandle_t	rivetMarkShader;
+
+	qhandle_t	saberClashFlare;
+
+	//JAPRO - Clientside - Use all saber hum sounds found in base assets
+	qhandle_t	saberHumSounds[5];
 
 	qhandle_t	teamRedShader;
 	qhandle_t	teamBlueShader;
@@ -1923,8 +1936,9 @@ typedef struct cgMedia_s {
 		qhandle_t	tophat;
 	} cosmetics;
 
-	sfxHandle_t		maleVGSSounds[MAX_CUSTOM_VGS_SOUNDS];//vgs
-	sfxHandle_t		femaleVGSSounds[MAX_CUSTOM_VGS_SOUNDS];//vgs
+	//japro vgs
+	sfxHandle_t		maleVGSSounds[MAX_CUSTOM_VGS_SOUNDS];
+	sfxHandle_t		femaleVGSSounds[MAX_CUSTOM_VGS_SOUNDS];
 
 } cgMedia_t;
 
@@ -2060,6 +2074,10 @@ typedef struct cgEffects_s {
 	fxHandle_t grappleHitWall;
 	fxHandle_t grappleHitPlayer;
 #endif
+
+	//breath effects
+	fxHandle_t	breath;
+	fxHandle_t	waterBreath;
 } cgEffects_t;
 
 #define MAX_STATIC_MODELS 4000
@@ -2140,15 +2158,12 @@ typedef struct cgs_s {
 	int				flagStatus;
 
 //[JAPRO - Clientside - All - Add cinfo variables to get cinfo from server japlus and japro servers - Start]
+	serverMod_t	serverMod;
 	int			cinfo;
 	int			jcinfo;
+	qboolean	pluginSet;
+	qboolean	legacyProtocol; //for compatibility with 1.00 servers
 	int			restricts;//make this a short?
-	qboolean	isJAPro;
-	qboolean	isJAPlus;
-	qboolean	isOJKAlt;
-	qboolean	isBaseEnhanced;
-	qboolean	isBase;
-	qboolean	legacyProtocol;
 	int			svfps;
 	qboolean	takenscreenshot;
 	int			hookpull;
@@ -2157,6 +2172,7 @@ typedef struct cgs_s {
 
 	qboolean  newHud;
 	float widthRatioCoef;
+	qboolean  jaPROEngine; //egh
 
 	//
 	// locally derived information from gamestate
@@ -2257,8 +2273,6 @@ void CG_TestModelNextFrame_f (void);
 void CG_TestModelPrevFrame_f (void);
 void CG_TestModelNextSkin_f (void);
 void CG_TestModelPrevSkin_f (void);
-void CG_ZoomDown_f( void );
-void CG_ZoomUp_f( void );
 void CG_AddBufferedSound( sfxHandle_t sfx);
 
 void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demoPlayback );
@@ -2328,7 +2342,8 @@ void CG_DrawFlagModel( float x, float y, float w, float h, int team, qboolean fo
 void CG_DrawTeamBackground( int x, int y, int w, int h, float alpha, int team );
 void CG_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y, int ownerDraw, int ownerDrawFlags, int align, float special, float scale, vec4_t color, qhandle_t shader, int textStyle,int font);
 void CG_Text_Paint(float x, float y, float scale, vec4_t color, const char *text, float adjust, int limit, int style, int iMenuFont);
-int CG_Text_Width(const char *text, float scale, int iMenuFont);
+float CG_Text_Width(const char *text, float scale, int iMenuFont);
+int CG_Text_WidthInt(const char *text, float scale, int iMenuFont);
 int CG_Text_Height(const char *text, float scale, int iMenuFont);
 float CG_GetValue(int ownerDraw);
 qboolean CG_OwnerDrawVisible(int flags);
@@ -2465,8 +2480,19 @@ localEntity_t	*CG_AllocLocalEntity( void );
 void	CG_AddLocalEntities( void );
 #if _NEWTRAILS
 	void CG_InitStrafeTrails( void );
-	strafeTrail_t	*CG_AllocStrafeTrail( void );
+strafeTrail_t	*CG_AllocStrafeTrail( void );
 #endif
+
+#define MAX_COSMETIC_UNLOCKS 32
+typedef struct CosmeticUnlocks_s {
+	unsigned short	bitvalue;
+	char			mapname[40];
+	short			style;
+	unsigned int	duration;
+	qboolean		active;
+} CosmeticUnlocks_t;
+CosmeticUnlocks_t cosmeticUnlocks[MAX_COSMETIC_UNLOCKS];
+//japro
 
 //
 // cg_effects.c

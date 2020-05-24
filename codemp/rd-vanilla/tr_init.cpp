@@ -171,7 +171,6 @@ cvar_t	*r_marksOnTriangleMeshes;
 
 cvar_t	*r_aspectCorrectFonts;
 cvar_t	*cl_ratioFix;
-cvar_t	*cl_coloredTextShadows;
 
 // the limits apply to the sum of all scenes in a frame --
 // the main view, all the 3D icons, etc
@@ -222,6 +221,10 @@ cvar_t *se_language;
 
 cvar_t *r_aviMotionJpegQuality;
 cvar_t *r_screenshotJpegQuality;
+
+#if !defined(__APPLE__)
+PFNGLSTENCILOPSEPARATEPROC qglStencilOpSeparate;
+#endif
 
 PFNGLACTIVETEXTUREARBPROC qglActiveTextureARB;
 PFNGLCLIENTACTIVETEXTUREARBPROC qglClientActiveTextureARB;
@@ -739,6 +742,16 @@ static void GLimp_InitExtensions( void )
 		g_bDynamicGlowSupported = false;
 		ri.Cvar_Set( "r_DynamicGlow","0" );
 	}
+
+#if !defined(__APPLE__)
+	qglStencilOpSeparate = (PFNGLSTENCILOPSEPARATEPROC)ri.GL_GetProcAddress("glStencilOpSeparate");
+	if ( qglStencilOpSeparate )
+	{
+		glConfigExt.doStencilShadowsInOneDrawcall = qtrue;
+	}
+#else
+	glConfigExt.doStencilShadowsInOneDrawcall = qtrue;
+#endif
 }
 
 // Truncates the GL extensions string by only allowing up to 'maxExtensions' extensions in the string.
@@ -1519,6 +1532,30 @@ void R_AtiHackToggle_f(void)
 	g_bTextureRectangleHack = !g_bTextureRectangleHack;
 }
 
+void R_RemapSkyShader_f (void) {
+	int num;
+
+	if (ri.Cmd_Argc() != 2 || !strlen(ri.Cmd_Argv(1))) {
+		ri.Printf(PRINT_ALL, "Usage: /remapSky <new>\n");
+		return;
+	}
+
+	for (num = 0; num < tr.numShaders; num++) {
+		if (tr.shaders[num]->sky)
+		{
+			R_RemapShader(tr.shaders[num]->name, ri.Cmd_Argv(1), NULL);
+		}
+	}
+}
+
+void R_ClearRemaps_f(void) {
+	int num;
+
+	for (num = 0; num < tr.numShaders; num++) {
+		tr.shaders[num]->remappedShader = NULL;
+	}
+}
+
 typedef struct consoleCommand_s {
 	const char	*cmd;
 	xcommand_t	func;
@@ -1538,6 +1575,9 @@ static consoleCommand_t	commands[] = {
 	{ "imagecacheinfo",		RE_RegisterImages_Info_f },
 	{ "modellist",			R_Modellist_f },
 	{ "modelcacheinfo",		RE_RegisterModels_Info_f },
+	{ "r_cleardecals",		RE_ClearDecals },
+	{ "remapSky",			R_RemapSkyShader_f },
+	{ "clearRemaps",		R_ClearRemaps_f }
 };
 
 static const size_t numCommands = ARRAY_LEN( commands );
@@ -1607,7 +1647,6 @@ void R_Register( void )
 	ri.Cvar_CheckRange( r_znear, 0.001f, 10, qfalse );
 	r_ignoreGLErrors					= ri.Cvar_Get( "r_ignoreGLErrors",					"1",						CVAR_ARCHIVE_ND, "" );
 	r_fastsky							= ri.Cvar_Get( "r_fastsky",							"0",						CVAR_ARCHIVE_ND, "" );
-
 	r_inGameVideo						= ri.Cvar_Get( "r_inGameVideo",						"1",						CVAR_ARCHIVE_ND, "" );
 	r_drawSun							= ri.Cvar_Get( "r_drawSun",							"0",						CVAR_ARCHIVE_ND, "" );
 	r_dynamiclight						= ri.Cvar_Get( "r_dynamiclight",					"1",						CVAR_ARCHIVE, "" );
@@ -1674,7 +1713,6 @@ void R_Register( void )
 	r_marksOnTriangleMeshes				= ri.Cvar_Get( "r_marksOnTriangleMeshes",			"0",						CVAR_ARCHIVE_ND, "" );
 	r_aspectCorrectFonts				= ri.Cvar_Get( "r_aspectCorrectFonts",				"0",						CVAR_ARCHIVE, "" );
 	cl_ratioFix							= ri.Cvar_Get( "cl_ratioFix",						"1",						CVAR_ARCHIVE, "" );
-	cl_coloredTextShadows				= ri.Cvar_Get( "cl_coloredTextShadows",				"0",						CVAR_ARCHIVE, "Toggle colored text shadows" );
 	r_maxpolys							= ri.Cvar_Get( "r_maxpolys",						XSTRING( DEFAULT_MAX_POLYS ),		CVAR_NONE, "" );
 	r_maxpolyverts						= ri.Cvar_Get( "r_maxpolyverts",					XSTRING( DEFAULT_MAX_POLYVERTS ),	CVAR_NONE, "" );
 /*

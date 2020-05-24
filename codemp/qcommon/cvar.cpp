@@ -666,7 +666,7 @@ cvar_t *Cvar_Set2( const char *var_name, const char *value, uint32_t defaultFlag
 	{
 		if ( (var->flags & (CVAR_SYSTEMINFO|CVAR_SERVER_CREATED)) && CL_ConnectedToRemoteServer() )
 		{
-			Com_Printf ("%s can only be set by server.\n", var_name);
+			Com_Printf ("[skipnotify]%s can only be set by server.\n", var_name);
 			return var;
 		}
 
@@ -678,7 +678,7 @@ cvar_t *Cvar_Set2( const char *var_name, const char *value, uint32_t defaultFlag
 
 		if (var->flags & CVAR_INIT)
 		{
-			Com_Printf ("%s is write protected.\n", var_name);
+			Com_Printf ("%s can only be set at startup time by using a \"+set\" command line parameter.\n", var_name);
 			return var;
 		}
 
@@ -703,11 +703,13 @@ cvar_t *Cvar_Set2( const char *var_name, const char *value, uint32_t defaultFlag
 			return var;
 		}
 #ifndef TECH
+		/*//Dinurdo
 		if ( (var->flags & CVAR_CHEAT) && !cvar_cheats->integer )
 		{
 			Com_Printf ("%s is cheat protected.\n", var_name);
 			return var;
 		}
+		*/
 #endif
 	}
 	else
@@ -839,7 +841,7 @@ void Cvar_VM_Set( const char *var_name, const char *value, vmSlots_t vmslot )
 
 	if ( vmslot != VM_GAME && (flags & CVAR_SYSTEMINFO) && CL_ConnectedToRemoteServer() )
 	{
-		Com_Printf ("%s can only be set by server.\n", var_name);
+		Com_Printf ("[skipnotify]%s can only be set by server.\n", var_name);
 		return;
 	}
 
