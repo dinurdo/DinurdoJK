@@ -681,6 +681,18 @@ static void CG_ListRemaps_f(void) {
 
 }
 
+static void CG_ListEmojis_f(void) {
+	int i, count = 0;
+	for (i = 0; i < MAX_LOADABLE_EMOJIS; i++) {
+		if ((emojis[i].name && emojis[i].name[0])) {
+			count++;
+			Com_Printf("^3%s^2, ", emojis[i].name);
+		}
+	}
+	if (count)
+		Com_Printf("(%i) emojis\n", count);
+}
+
 #if 1
 void CG_StrafeTrailLine( vec3_t start, vec3_t end, int time, int clientNum, int number);
 void CG_SpawnStrafeTrailFromCFG_f(void) //loda fixme
@@ -2206,6 +2218,7 @@ static consoleCommand_t	commands[] = {
 	{ "loadTrail",					CG_SpawnStrafeTrailFromCFG_f },
 	{ "weaplast",					CG_LastWeapon_f },
 	{ "do",							CG_Do_f },
+	{ "listEmojis",					CG_ListEmojis_f }
 };
 
 static const size_t numCommands = ARRAY_LEN( commands );
